@@ -1,7 +1,11 @@
 version: '3.9'
 
+# ChromaDB has been removed from Docker — it now runs as a Python library
+# using chromadb.PersistentClient(). Data lives in ./data/chroma on the host.
+# Only MongoDB needs Docker.
+
 services:
-  # MongoDB for structured data
+  # MongoDB for structured data (tasks, notes, sessions)
   mongo:
     image: mongo:7
     container_name: aiden_mongo
@@ -19,39 +23,18 @@ services:
     networks:
       - aiden_network
 
-  # ChromaDB for vector embeddings
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: aiden_chromadb
+  # MCP Google Calendar Server
+  calendar-mcp:
+    image: node:20-alpine
+    container_name: aiden_calendar_mcp
+    command: npx @modelcontextprotocol/server-google-calendar
     ports:
-      - "8001:8000"
-    volumes:
-      - chroma_data:/chroma/chroma
+      - "3000:3000"
     environment:
-      IS_PERSISTENT: "TRUE"
-      ANONYMIZED_TELEMETRY: "FALSE"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     networks:
       - aiden_network
-
-  # MCP Google Calendar Server
-  # NOTE: @modelcontextprotocol/server-google-calendar does not exist on npm.
-  # Uncomment and replace 'command' with a valid MCP calendar server when available.
-  # calendar-mcp:
-  #   image: node:20-alpine
-  #   container_name: aiden_calendar_mcp
-  #   command: npx @modelcontextprotocol/server-google-calendar
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-  #     GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-  #   networks:
-  #     - aiden_network
 
   # FastAPI Backend (uncomment when ready to deploy)
   # api:
@@ -65,15 +48,14 @@ services:
   #     GEMINI_API_KEY: ${GEMINI_API_KEY}
   #     MONGO_URI: mongodb://mongo:27017
   #     MONGO_DB: aiden
-  #     CHROMA_HOST: chromadb
-  #     CHROMA_PORT: 8001
+  #     CHROMA_PATH: /app/data/chroma   # mounted volume below
   #     CALENDAR_MCP_URL: http://calendar-mcp:3000/sse
   #     JWT_SECRET: ${JWT_SECRET}
   #     ENV: production
+  #   volumes:
+  #     - chroma_data:/app/data/chroma  # persist ChromaDB data
   #   depends_on:
   #     mongo:
-  #       condition: service_healthy
-  #     chromadb:
   #       condition: service_healthy
   #   networks:
   #     - aiden_network
@@ -96,7 +78,7 @@ services:
 volumes:
   mongo_data:
     driver: local
-  chroma_data:
+  chroma_data:    # used only when API container is enabled above
     driver: local
 
 networks:
