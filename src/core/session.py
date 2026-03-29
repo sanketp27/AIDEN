@@ -1,7 +1,3 @@
-"""
-ADK Session Service with MongoDB persistence
-Implements BaseSessionService from google.adk.sessions (ADK 1.x API)
-"""
 from google.adk.sessions import BaseSessionService, Session
 from google.adk.events import Event
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -34,14 +30,31 @@ class MongoDBSessionService(BaseSessionService):
     # Internal helpers                                                     #
     # ------------------------------------------------------------------ #
 
+    def _make_mongo_safe(self, obj):
+        """Recursively convert types MongoDB cannot encode (set -> list)."""
+        if isinstance(obj, set):
+            return [self._make_mongo_safe(i) for i in obj]
+        if isinstance(obj, dict):
+            return {k: self._make_mongo_safe(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self._make_mongo_safe(i) for i in obj]
+        return obj
+
     def _session_to_doc(self, session: Session) -> dict:
         """Serialize a Session to a MongoDB document."""
+        raw_events = []
+        for e in (session.events or []):
+            try:
+                # model_dump may contain set() in long_running_tool_ids — sanitize
+                raw_events.append(self._make_mongo_safe(e.model_dump()))
+            except Exception:
+                pass  # skip unserializable events
         return {
             "session_id": session.id,
             "app_name": session.app_name,
             "user_id": session.user_id,
-            "state": session.state or {},
-            "events": [e.model_dump() for e in (session.events or [])],
+            "state": self._make_mongo_safe(session.state or {}),
+            "events": raw_events,
             "last_update_time": session.last_update_time,
         }
 
