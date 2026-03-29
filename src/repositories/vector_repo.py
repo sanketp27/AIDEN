@@ -1,6 +1,10 @@
 """
 Vector repository for ChromaDB semantic search
 Per-user collection namespacing for data isolation
+
+Uses chromadb.PersistentClient — no Docker/server required.
+Data is stored on disk at settings.CHROMA_PATH (default: ./data/chroma).
+ChromaDB handles embedding automatically using its built-in default model.
 """
 import chromadb
 from src.core.config import settings
@@ -9,6 +13,8 @@ import structlog
 
 log = structlog.get_logger()
 
+# Module-level singleton so the same client is reused across all repo instances.
+# PersistentClient is thread-safe and handles its own file locking internally.
 _chroma_client = None
 
 
@@ -25,6 +31,7 @@ class VectorRepository:
     """Repository for vector embeddings and semantic search"""
 
     def __init__(self):
+        # Defer actual client creation until first use (lazy init)
         self._client = None
 
     @property

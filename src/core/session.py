@@ -1,21 +1,27 @@
 """
 ADK Session Service with MongoDB persistence
-Critical for conversation memory across all agents
+Implements BaseSessionService from google.adk.sessions (ADK 1.x API)
 """
-from google.adk.sessions import SessionService, Session
+from google.adk.sessions import BaseSessionService, Session
+from google.adk.events import Event
 from motor.motor_asyncio import AsyncIOMotorClient
 from src.core.config import settings
-from typing import Optional
+from typing import Optional, Any
+import time
 import structlog
-import json
 
 log = structlog.get_logger()
 
 
-class MongoDBSessionService(SessionService):
+class MongoDBSessionService(BaseSessionService):
     """
-    MongoDB-backed session service for ADK
-    Provides persistent conversation memory across sessions
+    MongoDB-backed session service for ADK 1.x
+    Implements the BaseSessionService interface:
+      - create_session(app_name, user_id, state, session_id) -> Session
+      - get_session(app_name, user_id, session_id) -> Optional[Session]
+      - list_sessions(app_name, user_id) -> ListSessionsResponse
+      - delete_session(app_name, user_id, session_id) -> None
+      - append_event(session, event) -> Event
     """
 
     def __init__(self):
@@ -24,97 +30,161 @@ class MongoDBSessionService(SessionService):
         self.sessions = self.db.adk_sessions
         log.info("mongodb_session_service_initialized", db=settings.MONGO_DB)
 
-    async def get_session(self, session_id: str, user_id: str) -> Session:
-        """
-        Retrieve session from MongoDB or create new one
+    # ------------------------------------------------------------------ #
+    # Internal helpers                                                     #
+    # ------------------------------------------------------------------ #
 
-        Args:
-            session_id: Unique session identifier
-            user_id: User identifier for data isolation
+    def _session_to_doc(self, session: Session) -> dict:
+        """Serialize a Session to a MongoDB document."""
+        return {
+            "session_id": session.id,
+            "app_name": session.app_name,
+            "user_id": session.user_id,
+            "state": session.state or {},
+            "events": [e.model_dump() for e in (session.events or [])],
+            "last_update_time": session.last_update_time,
+        }
 
-        Returns:
-            Session object with conversation history
-        """
-        doc = await self.sessions.find_one({
-            "session_id": session_id,
-            "user_id": user_id
-        })
+    def _doc_to_session(self, doc: dict) -> Session:
+        """Deserialize a MongoDB document back to a Session."""
+        events = []
+        for e_dict in doc.get("events", []):
+            try:
+                events.append(Event(**e_dict))
+            except Exception:
+                pass  # skip malformed events rather than crashing
 
-        if doc:
-            # Convert MongoDB document to Session
-            doc.pop("_id", None)  # Remove MongoDB _id
-            log.info("session_retrieved", session_id=session_id, user_id=user_id,
-                    message_count=len(doc.get("messages", [])))
-            return Session.from_dict(doc)
-
-        # Create new session
-        new_session = Session(session_id=session_id, user_id=user_id, messages=[])
-        log.info("session_created", session_id=session_id, user_id=user_id)
-        return new_session
-
-    async def save_session(self, session: Session) -> None:
-        """
-        Persist session to MongoDB
-
-        Args:
-            session: Session object to save
-        """
-        session_dict = session.to_dict()
-
-        await self.sessions.update_one(
-            {
-                "session_id": session.session_id,
-                "user_id": session.user_id
-            },
-            {"$set": session_dict},
-            upsert=True
+        return Session(
+            id=doc["session_id"],
+            app_name=doc["app_name"],
+            user_id=doc["user_id"],
+            state=doc.get("state", {}),
+            events=events,
+            last_update_time=doc.get("last_update_time", 0.0),
         )
 
-        log.info("session_saved",
-                session_id=session.session_id,
-                user_id=session.user_id,
-                message_count=len(session.messages))
+    # ------------------------------------------------------------------ #
+    # BaseSessionService interface                                         #
+    # ------------------------------------------------------------------ #
 
-    async def delete_session(self, session_id: str, user_id: str) -> None:
-        """
-        Delete session from MongoDB
+    async def create_session(
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        state: Optional[dict[str, Any]] = None,
+        session_id: Optional[str] = None,
+    ) -> Session:
+        """Create and persist a new session."""
+        import uuid
+        sid = session_id or str(uuid.uuid4())
 
-        Args:
-            session_id: Session to delete
-            user_id: User identifier
-        """
-        result = await self.sessions.delete_one({
+        session = Session(
+            id=sid,
+            app_name=app_name,
+            user_id=user_id,
+            state=state or {},
+            events=[],
+            last_update_time=time.time(),
+        )
+
+        doc = self._session_to_doc(session)
+        await self.sessions.update_one(
+            {"session_id": sid, "app_name": app_name, "user_id": user_id},
+            {"$set": doc},
+            upsert=True,
+        )
+
+        log.info("session_created", session_id=sid, user_id=user_id, app_name=app_name)
+        return session
+
+    async def get_session(
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        config=None,
+    ) -> Optional[Session]:
+        """Retrieve a session from MongoDB, or return None if not found."""
+        doc = await self.sessions.find_one({
             "session_id": session_id,
-            "user_id": user_id
+            "app_name": app_name,
+            "user_id": user_id,
         })
 
-        if result.deleted_count > 0:
-            log.info("session_deleted", session_id=session_id, user_id=user_id)
-        else:
-            log.warning("session_not_found", session_id=session_id, user_id=user_id)
+        if not doc:
+            log.info("session_not_found", session_id=session_id, user_id=user_id)
+            return None
 
-    async def list_sessions(self, user_id: str, limit: int = 50) -> list[dict]:
-        """
-        List recent sessions for a user
+        doc.pop("_id", None)
+        session = self._doc_to_session(doc)
+        log.info(
+            "session_retrieved",
+            session_id=session_id,
+            user_id=user_id,
+            events=len(session.events),
+        )
+        return session
 
-        Args:
-            user_id: User identifier
-            limit: Maximum number of sessions to return
+    async def list_sessions(self, *, app_name: str, user_id: Optional[str] = None):
+        """List sessions for a user (returns ADK ListSessionsResponse)."""
+        from google.adk.sessions.base_session_service import ListSessionsResponse
 
-        Returns:
-            List of session metadata
-        """
+        query: dict = {"app_name": app_name}
+        if user_id:
+            query["user_id"] = user_id
+
         cursor = self.sessions.find(
-            {"user_id": user_id},
-            {"session_id": 1, "user_id": 1, "created_at": 1, "_id": 0}
-        ).sort("created_at", -1).limit(limit)
+            query,
+            {"session_id": 1, "user_id": 1, "app_name": 1, "last_update_time": 1, "_id": 0},
+        ).sort("last_update_time", -1).limit(50)
 
         sessions = []
         async for doc in cursor:
-            sessions.append(doc)
+            sessions.append(Session(
+                id=doc["session_id"],
+                app_name=doc["app_name"],
+                user_id=doc.get("user_id", ""),
+                last_update_time=doc.get("last_update_time", 0.0),
+            ))
 
-        return sessions
+        return ListSessionsResponse(sessions=sessions)
+
+    async def delete_session(
+        self, *, app_name: str, user_id: str, session_id: str
+    ) -> None:
+        """Delete a session from MongoDB."""
+        result = await self.sessions.delete_one({
+            "session_id": session_id,
+            "app_name": app_name,
+            "user_id": user_id,
+        })
+        if result.deleted_count:
+            log.info("session_deleted", session_id=session_id, user_id=user_id)
+        else:
+            log.warning("session_not_found_for_delete", session_id=session_id)
+
+    async def append_event(self, session: Session, event: Event) -> Event:
+        """Append an event to the session and persist it."""
+        # Delegate state mutation to the base class (handles state delta merging)
+        event = await super().append_event(session=session, event=event)
+
+        # Persist updated session
+        doc = self._session_to_doc(session)
+        doc["last_update_time"] = time.time()
+        await self.sessions.update_one(
+            {
+                "session_id": session.id,
+                "app_name": session.app_name,
+                "user_id": session.user_id,
+            },
+            {"$set": doc},
+            upsert=True,
+        )
+
+        return event
 
 
-# Singleton instance for use across the application
+# Singleton instance
 session_service = MongoDBSessionService()
