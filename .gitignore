@@ -2,3 +2,8 @@ README_P0.md
 *.md
 *.docx
 AIDEN*
+.venv/*
+.env*
+__pycache__/*
+.vscode/*
+*.pyc
