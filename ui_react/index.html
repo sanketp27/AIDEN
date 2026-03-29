@@ -532,6 +532,7 @@
         <div class="tasks-list">
           <div class="tasks-header">
             <div class="tasks-title">Tasks</div>
+            <button class="filter-chip" onclick="loadTasks()" title="Refresh tasks" style="margin-left:auto">↻ Refresh</button>
             <button class="filter-chip active" onclick="filterTasks(null, this)">All</button>
           </div>
           <div class="tasks-filters">
@@ -786,7 +787,11 @@ async function sendMessage() {
       sessionId = data.session_id;
       appendMsg('ai', data.response, data.agents_used || []);
       // Refresh tasks/notes in background after chat
-      loadTasks(true);
+      const prevCount = allTasks.length;
+      await loadTasks(true);
+      if (allTasks.length > prevCount) {
+        showToast(`✓ ${allTasks.length - prevCount} new task(s) saved — view in Tasks tab`, 'success');
+      }
       loadNotes(true);
     } else {
       appendMsg('ai', `⚠️ Error: ${data.detail || 'Unknown error'}`, []);
@@ -804,9 +809,7 @@ function appendMsg(role, text, agents) {
   const isAI = role === 'ai';
   const agentBadges = agents.map(a => `<span class="msg-agent-badge">${a.toUpperCase()}</span>`).join(' ');
 
-  const safeText = text
-    .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
-    .replace(/\n/g, '<br/>');
+  const safeText = parseMarkdown(text);
 
   const div = document.createElement('div');
   div.className = `msg ${isAI ? 'ai' : 'user'}`;
@@ -825,6 +828,20 @@ function appendMsg(role, text, agents) {
   wrap.appendChild(div);
   wrap.scrollTop = wrap.scrollHeight;
   return div;
+}
+
+function parseMarkdown(text) {
+  return text
+    // Code blocks (must come before inline code)
+    .replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) => `<pre>${escHtml(code.trim())}</pre>`)
+    // Inline code
+    .replace(/`([^`]+)`/g, (_, code) => `<code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);font-size:12px;color:var(--cyan)">${escHtml(code)}</code>`)
+    // Bold **text**
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    // Italic *text*
+    .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+    // Newlines
+    .replace(/\n/g, '<br/>');
 }
 
 function appendTyping() {
