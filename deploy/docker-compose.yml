@@ -1,0 +1,103 @@
+version: '3.9'
+
+services:
+  # MongoDB for structured data
+  mongo:
+    image: mongo:7
+    container_name: aiden_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: aiden
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiden_network
+
+  # ChromaDB for vector embeddings
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: aiden_chromadb
+    ports:
+      - "8001:8001"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiden_network
+
+  # MCP Google Calendar Server
+  calendar-mcp:
+    image: node:20-alpine
+    container_name: aiden_calendar_mcp
+    command: npx @modelcontextprotocol/server-google-calendar
+    ports:
+      - "3000:3000"
+    environment:
+      # TODO: User needs to provide OAuth credentials
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    networks:
+      - aiden_network
+
+  # FastAPI Backend (uncomment when ready to deploy)
+  # api:
+  #   build:
+  #     context: ..
+  #     dockerfile: deploy/Dockerfile.api
+  #   container_name: aiden_api
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     GEMINI_API_KEY: ${GEMINI_API_KEY}
+  #     MONGO_URI: mongodb://mongo:27017
+  #     MONGO_DB: aiden
+  #     CHROMA_HOST: chromadb
+  #     CHROMA_PORT: 8001
+  #     CALENDAR_MCP_URL: http://calendar-mcp:3000/sse
+  #     JWT_SECRET: ${JWT_SECRET}
+  #     ENV: production
+  #   depends_on:
+  #     mongo:
+  #       condition: service_healthy
+  #     chromadb:
+  #       condition: service_healthy
+  #   networks:
+  #     - aiden_network
+
+  # Streamlit UI (uncomment when ready to deploy)
+  # ui:
+  #   build:
+  #     context: ..
+  #     dockerfile: deploy/Dockerfile.ui
+  #   container_name: aiden_ui
+  #   ports:
+  #     - "8501:8501"
+  #   environment:
+  #     API_BASE_URL: http://api:8000
+  #   depends_on:
+  #     - api
+  #   networks:
+  #     - aiden_network
+
+volumes:
+  mongo_data:
+    driver: local
+  chroma_data:
+    driver: local
+
+networks:
+  aiden_network:
+    driver: bridge

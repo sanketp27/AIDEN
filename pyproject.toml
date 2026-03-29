@@ -1,0 +1,92 @@
+[project]
+name = "aiden"
+version = "2.0.0"
+description = "AI Intelligent Daily Executive Navigator - Multi-agent productivity system"
+requires-python = ">=3.11"
+dependencies = [
+    # Agentic framework
+    "google-adk>=1.0.0",
+    "google-genai>=1.0.0",  # For Gemini Live API
+    "google-generativeai>=0.8.0",
+
+    # Voice (placeholder - commented out until user has GCP credentials)
+    # "google-cloud-speech>=2.26.0",
+    # "google-cloud-texttospeech>=2.17.0",
+
+    # Vision / Image
+    "Pillow>=10.3.0",
+
+    # API layer
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.6",  # For file uploads
+    "slowapi>=0.1.9",
+    "websockets>=13.0",
+    "httpx>=0.27.0",
+
+    # Data layer
+    "motor>=3.5.0",
+    "pymongo>=4.8.0",
+    "chromadb>=0.6.0",
+
+    # Scheduling
+    "apscheduler>=3.10.4",
+
+    # UI
+    "streamlit>=1.35.0",
+
+    # Models + cache
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "email-validator>=2.0.0",  # For EmailStr validation
+    "cachetools>=5.3.0",
+
+    # Observability
+    "structlog>=24.1.0",
+    "opentelemetry-api>=1.24.0",
+    "opentelemetry-sdk>=1.24.0",
+    "opentelemetry-instrumentation-fastapi>=0.45b0",
+    "prometheus-client>=0.20.0",
+
+    # Resilience
+    "tenacity>=8.3.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "black>=24.0.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
