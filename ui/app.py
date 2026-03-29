@@ -6,10 +6,10 @@ import streamlit as st
 import requests
 import os
 from datetime import datetime
-from ui.components.voice_input import render_voice_input
-from ui.components.audio_player import render_speaker_button
-from ui.components.image_upload import render_image_upload, show_image_examples
-from ui.components.gemini_live_voice import render_gemini_live_voice
+from components.voice_input import render_voice_input
+from components.audio_player import render_speaker_button
+from components.image_upload import render_image_upload, show_image_examples
+from components.gemini_live_voice import render_gemini_live_voice
 
 # Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
