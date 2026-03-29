@@ -4,6 +4,7 @@ Powered by Gemini Vision 2.0 Flash
 """
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
+from src.core.config import settings
 from src.tools.vision_tools import classify_image, analyze_image, extract_tasks_from_image
 
 VISION_INSTRUCTION = """You are Vision Agent, AIDEN's image and document understanding specialist.
@@ -131,7 +132,7 @@ Shall I save this contact?"
 
 vision_agent = Agent(
     name='vision_agent',
-    model='gemini-2.0-flash',  # Vision capability built-in
+    model=settings.VISION_MODEL,
     instruction=VISION_INSTRUCTION,
     tools=[
         FunctionTool(classify_image),

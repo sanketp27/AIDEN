@@ -3,6 +3,7 @@ Voice Agent - Speech-to-text and text-to-speech specialist
 Mock mode for P2, ready for real Google Speech APIs
 """
 from google.adk.agents import Agent
+from src.core.config import settings
 from src.tools.voice_tools import transcribe_audio, synthesize_speech
 
 VOICE_INSTRUCTION = """You are Voice Agent, AIDEN's speech processing specialist.
@@ -78,7 +79,7 @@ Would you like me to save this as a note instead?"
 
 voice_agent = Agent(
     name='voice_agent',
-    model='gemini-2.0-flash',
+    model=settings.VOICE_AGENT_MODEL,
     instruction=VOICE_INSTRUCTION,
     tools=[transcribe_audio, synthesize_speech]
 )

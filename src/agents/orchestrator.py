@@ -2,6 +2,12 @@
 AIDEN Core Orchestrator - Primary routing agent
 Routes user requests to appropriate sub-agents with intelligent coordination
 """
+import os
+from src.core.config import settings
+# Export key before any ADK/genai import so the client can authenticate
+os.environ.setdefault("GOOGLE_API_KEY", settings.GEMINI_API_KEY)
+os.environ.setdefault("GEMINI_API_KEY", settings.GEMINI_API_KEY)
+
 from google.adk.agents import Agent
 from google.adk.tools import AgentTool
 from src.agents.task_agent import task_master_agent
@@ -177,7 +183,7 @@ not just what they literally asked for. Be proactive, helpful, and make their li
 # Create AIDEN Core orchestrator with sub-agents
 aiden_core = Agent(
     name='aiden_core',
-    model='gemini-2.0-pro',  # Use Pro model for complex reasoning and routing
+    model=settings.ORCHESTRATOR_MODEL,  # Configurable via ORCHESTRATOR_MODEL in .env
     instruction=ORCHESTRATOR_INSTRUCTION,
     tools=[
         AgentTool(agent=task_master_agent),

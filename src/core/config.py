@@ -52,16 +52,18 @@ class Settings(BaseSettings):
     UI_PORT: int = 8501
 
     # === Model Configuration ===
-    DEFAULT_MODEL: str = "gemini-2.0-flash"
-    ORCHESTRATOR_MODEL: str = "gemini-2.0-pro"
-    VISION_MODEL: str = "gemini-2.0-flash"
+    ORCHESTRATOR_MODEL: str = "gemini-2.5-pro"
+    TASK_AGENT_MODEL: str = "gemini-2.5-flash"
+    CALENDAR_AGENT_MODEL: str = "gemini-2.5-flash"
+    NOTES_AGENT_MODEL: str = "gemini-2.5-flash"
+    VOICE_AGENT_MODEL: str = "gemini-2.5-flash"
+    VISION_MODEL: str = "gemini-2.5-flash"
+    DEFAULT_MODEL: str = "gemini-2.5-flash"
 
-    # === Performance ===
     SESSION_CACHE_TTL: int = 60  # seconds
     QUERY_CACHE_TTL: int = 30    # seconds
     MAX_CONCURRENT_AGENTS: int = 5
 
-    # === Limits ===
     MAX_IMAGE_SIZE_MB: int = 20
     MAX_IMAGES_PER_REQUEST: int = 5
     MAX_MESSAGE_LENGTH: int = 10000

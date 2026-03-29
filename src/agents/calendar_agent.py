@@ -95,7 +95,7 @@ Would you like me to:
 # Create CalendarBot agent with MCP Google Calendar integration
 calendar_bot_agent = Agent(
     name='calendar_bot',
-    model='gemini-2.0-flash',  # Fast model for calendar operations
+    model=settings.CALENDAR_AGENT_MODEL,
     instruction=CALENDAR_INSTRUCTION,
     tools=[
         MCPToolset(

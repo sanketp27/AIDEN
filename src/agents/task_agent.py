@@ -4,6 +4,7 @@ Handles all task-related operations via ADK tools
 """
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
+from src.core.config import settings
 from src.tools.task_tools import (
     create_task,
     list_tasks,
@@ -72,7 +73,7 @@ Would you like to work on any of these now?"
 # Create TaskMaster agent
 task_master_agent = Agent(
     name='task_master',
-    model='gemini-2.0-flash',  # Fast model for simple CRUD operations
+    model=settings.TASK_AGENT_MODEL,
     instruction=TASK_INSTRUCTION,
     tools=[
         FunctionTool(create_task),

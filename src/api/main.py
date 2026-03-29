@@ -35,6 +35,9 @@ log = structlog.get_logger()
 # Fix Bug #6: Use lifespan context manager instead of deprecated @app.on_event
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import os
+    os.environ.setdefault("GOOGLE_API_KEY", settings.GEMINI_API_KEY)
+    os.environ.setdefault("GEMINI_API_KEY", settings.GEMINI_API_KEY)
     log.info("aiden_api_starting", version="2.0.0", env=settings.ENV)
     yield
     log.info("aiden_api_shutting_down")

@@ -4,6 +4,7 @@ Handles notes with semantic search via ChromaDB
 """
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
+from src.core.config import settings
 from src.tools.notes_tools import (
     create_note,
     search_notes_semantic,
@@ -96,7 +97,7 @@ These notes contain your Q2 planning information. Want me to summarize the key g
 # Create NoteKeeper agent
 note_keeper_agent = Agent(
     name='note_keeper',
-    model='gemini-2.0-flash',  # Fast model for note operations
+    model=settings.NOTES_AGENT_MODEL,
     instruction=NOTES_INSTRUCTION,
     tools=[
         FunctionTool(create_note),
