@@ -124,7 +124,7 @@ async def health_check():
         "services": {
             # Fix Bug #9: Never expose raw connection URIs – they may contain credentials.
             "mongodb": "configured" if settings.MONGO_URI else "missing",
-            "chromadb": settings.chroma_url,
+            "chromadb": f"persistent:{settings.CHROMA_PATH}",
             "mcp_calendar": settings.CALENDAR_MCP_URL
         }
     }

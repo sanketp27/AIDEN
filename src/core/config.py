@@ -22,9 +22,9 @@ class Settings(BaseSettings):
     MONGO_URI: str = "mongodb://localhost:27017"
     MONGO_DB: str = "aiden"
 
-    # === ChromaDB ===
-    CHROMA_HOST: str = "localhost"
-    CHROMA_PORT: int = 8001
+    # === ChromaDB (local persistent library — no server/Docker needed) ===
+    # Data is stored on disk at this path. Add ./data/chroma to .gitignore.
+    CHROMA_PATH: str = "./data/chroma"
 
     # === JWT Authentication ===
     JWT_SECRET: str
@@ -74,9 +74,9 @@ class Settings(BaseSettings):
         return f"{self.MONGO_URI}/{self.MONGO_DB}"
 
     @property
-    def chroma_url(self) -> str:
-        """ChromaDB HTTP URL"""
-        return f"http://{self.CHROMA_HOST}:{self.CHROMA_PORT}"
+    def chroma_path_str(self) -> str:
+        """ChromaDB local data path"""
+        return self.CHROMA_PATH
 
     @property
     def is_production(self) -> bool:
