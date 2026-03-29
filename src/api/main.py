@@ -54,7 +54,13 @@ app = FastAPI(
 # Fix Bug #2: allow_origins=["*"] with allow_credentials=True is rejected by browsers.
 # Use explicit origins in production; fall back to localhost for development.
 ALLOWED_ORIGINS = (
-    ["http://localhost:8501", "http://127.0.0.1:8501"]
+    [
+        "http://localhost:8501", "http://127.0.0.1:8501",  # Streamlit UI
+        "http://localhost:3000", "http://127.0.0.1:3000",  # HTML UI (python -m http.server)
+        "http://localhost:5173", "http://127.0.0.1:5173",  # Vite dev server
+        "http://0.0.0.0:3000",  "http://0.0.0.0:8501",    # 0.0.0.0 variants
+        "null",                                               # file:// opened directly
+    ]
     if settings.is_development
     else [o.strip() for o in getattr(settings, "ALLOWED_ORIGINS", "").split(",") if o.strip()]
 )
