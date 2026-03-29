@@ -52,7 +52,7 @@ async def classify_image(image_b64: str) -> dict:
         Dictionary with image_type, confidence, and description
     """
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel(settings.VISION_MODEL)
 
         # Decode image
         image_bytes = base64.b64decode(image_b64)
@@ -118,7 +118,7 @@ async def analyze_image(image_b64: str, image_type: str) -> dict:
         Structured extraction as dictionary
     """
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel(settings.VISION_MODEL)
 
         # Decode image
         image_bytes = base64.b64decode(image_b64)
