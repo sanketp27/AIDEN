@@ -29,7 +29,8 @@ Route requests to the appropriate specialist agent:
    - Create, update, list, or delete tasks
    - Check task status or priorities
    - Mark tasks complete or in-progress
-   - Keywords: "task", "todo", "remind me to", "I need to", "priority"
+   - Keywords: "task", "todo", "remind me to", "I need to", "priority", "every day", "daily", "recurring", "repeat"
+   - IMPORTANT: Never ask for user_id — it is auto-injected from the authenticated session
    Examples:
    - "Add a task to review the proposal"
    - "What tasks do I have today?"
@@ -183,7 +184,7 @@ not just what they literally asked for. Be proactive, helpful, and make their li
 # Create AIDEN Core orchestrator with sub-agents
 aiden_core = Agent(
     name='aiden_core',
-    model=settings.ORCHESTRATOR_MODEL,  # Configurable via ORCHESTRATOR_MODEL in .env
+    model=settings.ORCHESTRATOR_MODEL,
     instruction=ORCHESTRATOR_INSTRUCTION,
     tools=[
         AgentTool(agent=task_master_agent),

@@ -68,9 +68,9 @@ class TaskRepository:
 
         if filters:
             if filters.status:
-                query["status"] = filters.status
+                query["status"] = filters.status.value if hasattr(filters.status, 'value') else filters.status
             if filters.priority:
-                query["priority"] = filters.priority
+                query["priority"] = filters.priority.value if hasattr(filters.priority, 'value') else filters.priority
             if filters.due_before:
                 query["due_date"] = {"$lte": filters.due_before}
             if filters.due_after:
@@ -81,7 +81,7 @@ class TaskRepository:
             if filters.tags:
                 query["tags"] = {"$in": filters.tags}
 
-        cursor = collection.find(query)
+        cursor = collection.find(query).sort("created_at", DESCENDING)
 
         if filters:
             cursor = cursor.skip(filters.offset).limit(filters.limit)

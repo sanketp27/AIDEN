@@ -10,7 +10,9 @@ from src.tools.task_tools import (
     list_tasks,
     update_task,
     delete_task,
-    get_task_by_id
+    get_task_by_id,
+    list_recurring_tasks,
+    cancel_recurring_task,
 )
 
 # Agent instruction defines capabilities and behavior
@@ -22,6 +24,12 @@ CAPABILITIES:
 - Update task fields including status transitions (todo → in_progress → completed)
 - Delete tasks permanently
 - Get detailed information about specific tasks
+
+RECURRING TASKS:
+- When user asks to create a recurring task (daily, weekly, weekdays, weekends, monthly),
+  ALWAYS use recurring parameter: create_task(title=..., recurring=daily)
+- DO NOT ask user for user_id — it is automatically provided by the system
+- After creating a recurring task, confirm both the template and today's instance were created
 
 PRIORITY LEVELS:
 - P0: Critical (requires immediate attention)
@@ -80,6 +88,8 @@ task_master_agent = Agent(
         FunctionTool(list_tasks),
         FunctionTool(update_task),
         FunctionTool(delete_task),
-        FunctionTool(get_task_by_id)
+        FunctionTool(get_task_by_id),
+        FunctionTool(list_recurring_tasks),
+        FunctionTool(cancel_recurring_task),
     ]
 )
