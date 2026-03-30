@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from src.api.routers import chat, tasks, notes, voice, vision, voice_ws
+from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits
 from src.core.config import settings
 import structlog
 import time
@@ -119,7 +119,8 @@ app.include_router(tasks.router)
 app.include_router(notes.router)
 app.include_router(voice.router)
 app.include_router(vision.router)
-app.include_router(voice_ws.router)  # WebSocket for real-time voice
+app.include_router(voice_ws.router)
+app.include_router(habits.router)
 
 
 # Health check endpoint
