@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     QUERY_CACHE_TTL: int = 30    # seconds
     MAX_CONCURRENT_AGENTS: int = 5
 
+    # === Limits ===
     MAX_IMAGE_SIZE_MB: int = 20
     MAX_IMAGES_PER_REQUEST: int = 5
     MAX_MESSAGE_LENGTH: int = 10000
