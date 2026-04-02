@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     GMAIL_POLL_INTERVAL_MINUTES: int = 15
     GMAIL_MAX_EMAILS_PER_RUN:    int = 30
     GMAIL_MARK_READ_AFTER_TASK:  bool = True
+    # OAuth2 credentials from Google Cloud Console
+    # https://console.cloud.google.com/apis/credentials
+    GMAIL_CLIENT_ID:     str = ""
+    GMAIL_CLIENT_SECRET: str = ""
 
     # === Telegram Bot ===
     TELEGRAM_BOT_TOKEN: str = ""              # BotFather token; empty = disabled
