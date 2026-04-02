@@ -126,8 +126,25 @@ def start_scheduler():
         replace_existing=True,
         misfire_grace_time=3600,
     )
+
+    # Gmail pipeline — interval set dynamically via POST /gmail/connect
+    # Register a default job placeholder; GET /gmail/connect reschedules it
+    try:
+        from src.services.gmail_pipeline import run_gmail_pipeline_for_all_users
+        from apscheduler.triggers.interval import IntervalTrigger
+        from src.core.config import settings as _s
+        scheduler.add_job(
+            run_gmail_pipeline_for_all_users,
+            trigger=IntervalTrigger(minutes=_s.GMAIL_POLL_INTERVAL_MINUTES),
+            id="gmail_pipeline",
+            replace_existing=True,
+            misfire_grace_time=120,
+        )
+    except Exception as _e:
+        log.warning("gmail_pipeline_job_setup_failed", error=str(_e))
+
     scheduler.start()
-    log.info("recurring_task_scheduler_started")
+    log.info("scheduler_started")
 
 
 def stop_scheduler():

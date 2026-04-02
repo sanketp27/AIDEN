@@ -53,6 +53,9 @@ dependencies = [
     # Resilience
     "tenacity>=8.3.0",
     "python-dotenv>=1.0.0",
+
+    # Telegram Bot integration
+    "python-telegram-bot[all]>=21.0",
 ]
 
 [project.optional-dependencies]

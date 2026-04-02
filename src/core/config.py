@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     CALENDAR_MCP_URL: str = "http://localhost:3000/sse"
     GMAIL_MCP_URL: str = "https://gmail.mcp.claude.com/mcp"
 
+    # === Gmail Pipeline (background polling) ===
+    GMAIL_POLL_INTERVAL_MINUTES: int = 15
+    GMAIL_MAX_EMAILS_PER_RUN:    int = 30
+    GMAIL_MARK_READ_AFTER_TASK:  bool = True
+
+    # === Telegram Bot ===
+    TELEGRAM_BOT_TOKEN: str = ""              # BotFather token; empty = disabled
+    AIDEN_API_URL:      str = "http://localhost:8000"
+
     # === Google Cloud (placeholder for P3+) ===
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     GCP_PROJECT_ID: Optional[str] = None
