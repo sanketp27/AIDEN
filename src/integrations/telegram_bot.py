@@ -145,6 +145,9 @@ class AIDENAPIClient:
 
 _aiden_client = AIDENAPIClient(bot_settings.AIDEN_API_URL)
 
+
+# ── Message formatters ───────────────────────────────────────────────────────
+
 _PRIORITY_EMOJI = {"P0": "🔴", "P1": "🟡", "P2": "🔵", "P3": "⚪"}
 _STATUS_EMOJI   = {"todo": "📋", "in_progress": "⚡", "completed": "✅", "cancelled": "❌"}
 
@@ -231,6 +234,13 @@ async def handle_start(bot, chat_id: int, args: list[str]) -> None:
 
     _register_session(chat_id, user_id, jwt)
 
+    try:
+        from src.repositories.prefs_repo import prefs_repo as _prefs
+        import asyncio as _asyncio
+        _asyncio.create_task(_prefs.set_telegram_chat(user_id, chat_id))
+    except Exception:
+        pass
+
     await bot.send_message(
         chat_id=chat_id,
         text=(
@@ -312,7 +322,7 @@ async def handle_text_message(bot, chat_id: int, text: str, sess: TelegramSessio
 
     try:
         result = await _aiden_client.chat(
-            message=text,
+            message=f"[TELEGRAM] {text}",
             jwt=sess.jwt_token,
             session_id=sess.session_id,
         )
