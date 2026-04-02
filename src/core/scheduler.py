@@ -1,7 +1,3 @@
-"""
-AIDEN v2.0 — Recurring Task Scheduler
-Uses APScheduler to spawn task instances from RecurringTask templates daily.
-"""
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from src.repositories.task_repo import TaskRepository
@@ -40,10 +36,6 @@ def _should_run_today(rt: dict) -> bool:
 
 
 async def spawn_recurring_tasks():
-    """
-    Called once per day (at midnight UTC).
-    Reads all due recurring templates and creates task instances.
-    """
     log.info("recurring_task_scheduler_run")
     templates = await task_repo.get_due_recurring_tasks()
 
@@ -80,13 +72,57 @@ async def spawn_recurring_tasks():
     log.info("recurring_task_scheduler_complete", spawned=spawned, total=len(templates))
 
 
+async def generate_all_briefings():
+    from src.analytics.briefing_generator import generate_briefing, COLL_BRIEFINGS
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from src.core.config import settings
+    from datetime import date
+
+    client = AsyncIOMotorClient(settings.MONGO_URI)
+    db = client[settings.MONGO_DB]
+
+    # Find all users who have task collections
+    collections = await db.list_collection_names()
+    user_ids = set()
+    for name in collections:
+        if name.endswith("__tasks"):
+            uid = name[:-7]   # strip "__tasks"
+            user_ids.add(uid)
+
+    log.info("briefing_generation_start", user_count=len(user_ids))
+
+    for user_id in user_ids:
+        try:
+            briefing = await generate_briefing(user_id=user_id, task_repo=task_repo)
+            doc = briefing.to_dict()
+            today = date.today().isoformat()
+            await db[COLL_BRIEFINGS].update_one(
+                {"user_id": user_id, "date": today},
+                {"$set": doc},
+                upsert=True,
+            )
+            log.info("briefing_stored", user_id=user_id, risk=briefing.workload_risk)
+        except Exception as e:
+            log.error("briefing_failed", user_id=user_id, error=str(e))
+
+    client.close()
+    log.info("briefing_generation_complete", users=len(user_ids))
+
+
 def start_scheduler():
     """Start the APScheduler background scheduler."""
-    # Run every day at 00:01 UTC
     scheduler.add_job(
         spawn_recurring_tasks,
         trigger=CronTrigger(hour=0, minute=1),
         id="spawn_recurring_tasks",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    # Morning briefings — 6 AM UTC (adjust via TZ for local time)
+    scheduler.add_job(
+        generate_all_briefings,
+        trigger=CronTrigger(hour=6, minute=0),
+        id="generate_briefings",
         replace_existing=True,
         misfire_grace_time=3600,
     )
