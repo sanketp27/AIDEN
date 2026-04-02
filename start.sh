@@ -75,7 +75,7 @@ cat << 'EOF'
  / ___ |_/ // /_/ / /___/ /|  /
 /_/  |_/___/_____/_____/_/ |_/
 
-  v2.0 — AI Intelligent Daily Executive Navigator
+  v2.0 — AI Daily Executive Navigator
 EOF
 echo -e "${RESET}"
 
