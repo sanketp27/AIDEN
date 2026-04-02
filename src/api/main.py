@@ -1,12 +1,8 @@
-"""
-AIDEN v2.0 FastAPI Application
-Main API server with all routers and middleware
-"""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits
+from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits, forecast, briefing
 from src.core.config import settings
 import structlog
 import time
@@ -121,6 +117,8 @@ app.include_router(voice.router)
 app.include_router(vision.router)
 app.include_router(voice_ws.router)
 app.include_router(habits.router)
+app.include_router(forecast.router)
+app.include_router(briefing.router)
 
 
 # Health check endpoint
