@@ -1,7 +1,3 @@
-"""
-AIDEN v2.0 Streamlit UI - Phase P2 Complete
-Multi-modal interface: Chat, Voice (Mock), and Vision (Gemini)
-"""
 import streamlit as st
 import requests
 import os
