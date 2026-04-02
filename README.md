@@ -8,7 +8,7 @@
 /_/  |_/___/_____/_____/_/ |_/
 ```
 
-### **AI Intelligent Daily Executive Navigator**
+### **AI Daily Executive Navigator**
 *A production-grade, multi-agent productivity system powered by Google Gemini*
 
 <br/>
@@ -41,7 +41,7 @@ AIDEN is not a single chatbot. It is an **orchestrated squad of specialized AI a
           │
           ▼
   ┌─────────────────────────┐
-  │   AIDEN  ORCHESTRATOR   │  ← Gemini 2.0 Pro — routes every request
+  │   AIDEN  ORCHESTRATOR   │  ← Gemini 2.5 Pro — routes every request
   └──────────┬──────────────┘
              │
      ┌───────┼──────────────────────────────────┐
@@ -177,9 +177,9 @@ Link your AIDEN account and interact from anywhere:
 
 | Component | Technology |
 |-----------|-----------|
-| Orchestration & Chat | Google Gemini 2.0 Pro |
-| Task / Note / Voice Agents | Google Gemini 2.0 Flash |
-| Vision Analysis | Google Gemini 2.0 Flash Vision |
+| Orchestration & Chat | Google Gemini 2.5 Pro |
+| Task / Note / Voice Agents | Google Gemini 2.5 Flash |
+| Vision Analysis | Google Gemini 2.5 Flash Vision |
 | Voice Transcription | Google Gemini 2.5 Flash TTS Preview |
 | Agent Framework | Google ADK 1.x |
 | Tool Integration | MCP (Model Context Protocol) |
@@ -511,7 +511,7 @@ Full interactive docs at **http://localhost:8000/docs**
 aiden/
 ├── src/
 │   ├── agents/
-│   │   ├── orchestrator.py       ← Gemini 2.0 Pro routing agent
+│   │   ├── orchestrator.py       ← Gemini 2.5 Pro routing agent
 │   │   ├── task_agent.py         ← TaskMaster specialist
 │   │   ├── calendar_agent.py     ← CalendarBot + MCP
 │   │   ├── notes_agent.py        ← NoteKeeper + semantic search
@@ -615,28 +615,6 @@ aiden/
 - [ ] Mobile PWA (installable from browser)
 - [ ] Multi-workspace / team support
 - [ ] Custom agent plugins via MCP
-
-<br/>
-
----
-
-## 🤝 &nbsp;Contributing
-
-```bash
-# Fork → clone → branch
-git checkout -b feature/your-feature-name
-
-# Install with dev extras
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Lint + format
-ruff check src/ && black src/
-
-# Open a PR against main
-```
 
 <br/>
 
