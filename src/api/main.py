@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits, forecast, briefing, gmail
+from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits, forecast, briefing, gmail, auth, preferences, sessions
 from src.core.config import settings
 import structlog
 import time
@@ -153,6 +153,9 @@ app.include_router(habits.router)
 app.include_router(forecast.router)
 app.include_router(briefing.router)
 app.include_router(gmail.router)
+app.include_router(auth.router)
+app.include_router(preferences.router)
+app.include_router(sessions.router)
 
 
 # Health check endpoint

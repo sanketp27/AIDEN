@@ -456,6 +456,9 @@ class GmailPipelineService:
         await self._gmail.close()
 
 
+# ── Multi-user scheduler job ─────────────────────────────────────────────────
+
+# Registry: user_id → JWT token (populated at runtime via POST /gmail/connect)
 _pipeline_registry: dict[str, str] = {}
 
 
