@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits, forecast, briefing
+from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits, forecast, briefing, gmail
 from src.core.config import settings
 import structlog
 import time
@@ -34,8 +34,41 @@ async def lifespan(app: FastAPI):
     import os
     os.environ.setdefault("GOOGLE_API_KEY", settings.GEMINI_API_KEY)
     os.environ.setdefault("GEMINI_API_KEY", settings.GEMINI_API_KEY)
+
+    # Initialize database collections + indexes
+    from src.core.db_init import initialize_database
+    await initialize_database()
+
+    # Start APScheduler (recurring tasks + briefings + Gmail pipeline)
+    from src.core.scheduler import start_scheduler
+    start_scheduler()
+
+    # Start Telegram bot as background asyncio task (non-blocking)
+    telegram_task = None
+    try:
+        from src.integrations.telegram_bot import bot_settings, run_bot
+        if bot_settings.TELEGRAM_BOT_TOKEN:
+            import asyncio
+            telegram_task = asyncio.create_task(run_bot())
+            log.info("telegram_bot_task_started")
+        else:
+            log.info("telegram_bot_skipped", reason="TELEGRAM_BOT_TOKEN not set")
+    except Exception as exc:
+        log.warning("telegram_bot_start_failed", error=str(exc))
     log.info("aiden_api_starting", version="2.0.0", env=settings.ENV)
     yield
+
+    # Graceful shutdown
+    from src.core.scheduler import stop_scheduler
+    stop_scheduler()
+
+    if telegram_task and not telegram_task.done():
+        telegram_task.cancel()
+        try:
+            import asyncio
+            await asyncio.wait_for(telegram_task, timeout=5)
+        except Exception:
+            pass
     log.info("aiden_api_shutting_down")
 
 
@@ -119,22 +152,32 @@ app.include_router(voice_ws.router)
 app.include_router(habits.router)
 app.include_router(forecast.router)
 app.include_router(briefing.router)
+app.include_router(gmail.router)
 
 
 # Health check endpoint
 @app.get("/health", tags=["System"])
 async def health_check():
     """Health check endpoint for Docker and monitoring"""
+    try:
+        from src.integrations.telegram_bot import bot_settings as tg_settings
+        tg_status = "enabled" if tg_settings.TELEGRAM_BOT_TOKEN else "disabled"
+    except Exception:
+        tg_status = "unavailable"
+
+    from src.services.gmail_pipeline import _pipeline_registry
     return {
         "status": "ok",
         "version": "2.0.0",
         "environment": settings.ENV,
         "services": {
-            # Fix Bug #9: Never expose raw connection URIs – they may contain credentials.
-            "mongodb": "configured" if settings.MONGO_URI else "missing",
-            "chromadb": f"persistent:{settings.CHROMA_PATH}",
-            "mcp_calendar": settings.CALENDAR_MCP_URL
-        }
+            "mongodb":       "configured" if settings.MONGO_URI else "missing",
+            "chromadb":      f"persistent:{settings.CHROMA_PATH}",
+            "mcp_calendar":  settings.CALENDAR_MCP_URL,
+            "mcp_gmail":     settings.GMAIL_MCP_URL,
+            "telegram_bot":  tg_status,
+            "gmail_pipeline": f"{len(_pipeline_registry)} user(s) connected",
+        },
     }
 
 

@@ -11,14 +11,13 @@ import structlog
 log = structlog.get_logger()
 
 
-# ── Collection name constants (single source of truth) ─────────────────────
 COLL_SESSIONS      = "adk_sessions"
 COLL_USERS         = "users"
 COLL_RECURRING     = "recurring_tasks"          # recurring task templates
+COLL_GMAIL_PROC    = "gmail_processed"            # idempotency log for Gmail pipeline
 # Per-user task/note collections follow: {user_id}__tasks, {user_id}__notes
 
 
-# ── Collection JSON schemas (MongoDB validator syntax) ──────────────────────
 TASK_SCHEMA = {
     "$jsonSchema": {
         "bsonType": "object",
@@ -124,6 +123,20 @@ SESSION_SCHEMA = {
 }
 
 
+
+GMAIL_PROCESSED_SCHEMA = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["user_id", "email_id"],
+        "properties": {
+            "user_id":      {"bsonType": "string"},
+            "email_id":     {"bsonType": "string"},
+            "subject":      {"bsonType": ["string", "null"]},
+            "processed_at": {"bsonType": "date"},
+        }
+    }
+}
+
 async def _ensure_collection(db, name: str, schema: dict | None = None):
     """Create collection if it doesn't exist, applying schema validator."""
     existing = await db.list_collection_names()
@@ -146,7 +159,6 @@ async def _ensure_collection(db, name: str, schema: dict | None = None):
 async def _ensure_global_indexes(db):
     """Create indexes on global (non-per-user) collections."""
 
-    # ── sessions ────────────────────────────────────────────────────────────
     sessions = db[COLL_SESSIONS]
     await sessions.create_index(
         [("session_id", ASCENDING), ("app_name", ASCENDING), ("user_id", ASCENDING)],
@@ -155,18 +167,23 @@ async def _ensure_global_indexes(db):
     await sessions.create_index([("user_id", ASCENDING), ("last_update_time", DESCENDING)],
                                 background=True, name="idx_session_user_time")
 
-    # ── users ────────────────────────────────────────────────────────────────
     users = db[COLL_USERS]
     await users.create_index([("user_id", ASCENDING)], unique=True, background=True)
     await users.create_index([("email", ASCENDING)], unique=True, background=True)
 
-    # ── recurring tasks ──────────────────────────────────────────────────────
     recurring = db[COLL_RECURRING]
     await recurring.create_index([("recurring_id", ASCENDING)], unique=True, background=True)
     await recurring.create_index([("user_id", ASCENDING), ("is_active", ASCENDING)],
                                  background=True, name="idx_recurring_user_active")
     await recurring.create_index([("last_created", ASCENDING)],
                                  background=True, name="idx_recurring_last_created")
+
+    gmail_proc = db[COLL_GMAIL_PROC]
+    await gmail_proc.create_index(
+        [("user_id", ASCENDING), ("email_id", ASCENDING)],
+        unique=True, background=True, name="idx_gmail_processed"
+    )
+    await gmail_proc.create_index([("processed_at", DESCENDING)], background=True)
 
     log.info("global_indexes_ensured")
 
@@ -185,6 +202,7 @@ async def initialize_database():
     await _ensure_collection(db, COLL_SESSIONS, SESSION_SCHEMA)
     await _ensure_collection(db, COLL_USERS,    USER_SCHEMA)
     await _ensure_collection(db, COLL_RECURRING, RECURRING_TASK_SCHEMA)
+    await _ensure_collection(db, COLL_GMAIL_PROC, GMAIL_PROCESSED_SCHEMA)
 
     await _ensure_global_indexes(db)
 
