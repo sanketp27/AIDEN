@@ -454,6 +454,62 @@
   .checkin-btn.done{background:var(--green-dim);color:var(--green);border-color:rgba(104,211,145,.4);cursor:default}
   .rate-bar{height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:12px}
   .rate-bar-fill{height:100%;background:var(--cyan);border-radius:2px;transition:width .4s ease}
+
+
+  /* ── BRIEFING ── */
+  .briefing-wrap{flex:1;overflow-y:auto;padding:20px}
+  .briefing-greeting{font-family:var(--font-body);font-size:18px;font-style:italic;color:var(--text);margin-bottom:6px;line-height:1.4}
+  .briefing-tip{font-family:var(--font-mono);font-size:11px;color:var(--cyan);margin-bottom:20px}
+  .briefing-risk{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;font-family:var(--font-mono);font-size:11px;margin-bottom:20px;border:1px solid}
+  .briefing-section{margin-bottom:20px}
+  .briefing-section-title{font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .briefing-section-title span{background:var(--bg4);padding:2px 8px;border-radius:10px;font-size:11px}
+  .briefing-task{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;transition:border-color .15s}
+  .briefing-task:hover{border-color:var(--border2)}
+  .briefing-task-title{flex:1;font-family:var(--font-head);font-size:13px;font-weight:600}
+  .briefing-task-due{font-family:var(--font-mono);font-size:10px;color:var(--text3)}
+  .briefing-habit{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px}
+  .habit-streak-mini{font-family:var(--font-head);font-size:16px;font-weight:800;color:var(--amber);min-width:28px;text-align:center}
+  .briefing-metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:20px}
+  .briefing-metric{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;text-align:center}
+  .briefing-metric-val{font-family:var(--font-head);font-size:24px;font-weight:700}
+  .briefing-metric-lbl{font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.1em;margin-top:2px}
+  .refresh-btn{font-family:var(--font-mono);font-size:11px;padding:6px 14px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s}
+  .refresh-btn:hover{color:var(--cyan);border-color:var(--cyan)}
+  /* ── FORECAST ── */
+  .forecast-wrap{flex:1;overflow-y:auto;padding:20px}
+  .forecast-header{display:flex;align-items:flex-start;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+  .risk-card{border-radius:12px;padding:16px 20px;border:1px solid;min-width:130px}
+  .risk-Low{background:var(--green-dim);border-color:rgba(104,211,145,.3)}
+  .risk-Medium{background:var(--amber-dim);border-color:rgba(246,173,85,.3)}
+  .risk-High{background:var(--red-dim);border-color:rgba(252,129,129,.3)}
+  .risk-Critical{background:var(--red-dim);border-color:var(--red)}
+  .risk-score{font-family:var(--font-head);font-size:36px;font-weight:800;line-height:1}
+  .risk-label{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;margin-top:2px}
+  .stat-cards{display:flex;gap:10px;flex-wrap:wrap}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;min-width:100px}
+  .stat-val{font-family:var(--font-head);font-size:22px;font-weight:700}
+  .stat-lbl{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;margin-top:2px}
+  .chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:16px}
+  .chart-title{font-family:var(--font-head);font-size:13px;font-weight:600;margin-bottom:12px}
+  .day-bars{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;align-items:end;height:80px;margin-bottom:8px}
+  .day-bar-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;height:100%}
+  .day-bar{width:100%;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s ease;background:var(--cyan)}
+  .day-bar.overloaded{background:var(--red)}
+  .day-bar.warning{background:var(--amber)}
+  .day-label{font-family:var(--font-mono);font-size:8px;color:var(--text3);text-align:center}
+  .day-bar-tooltip{font-family:var(--font-mono);font-size:9px;color:var(--text2);text-align:center}
+  .suggestion-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+  .suggestion-top{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .suggestion-title{font-family:var(--font-head);font-size:13px;font-weight:600;flex:1}
+  .arrow-badge{font-family:var(--font-mono);font-size:10px;background:var(--bg4);padding:3px 8px;border-radius:4px;color:var(--cyan)}
+  .suggestion-reason{font-family:var(--font-mono);font-size:11px;color:var(--text3);line-height:1.4}
+  .trend-badge{font-family:var(--font-mono);font-size:10px;padding:3px 10px;border-radius:12px}
+  .trend-improving{background:var(--green-dim);color:var(--green)}
+  .trend-declining{background:var(--red-dim);color:var(--red)}
+  .trend-stable{background:var(--bg4);color:var(--text3)}
+  .explain-btn{font-family:var(--font-mono);font-size:10px;padding:5px 12px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s}
+  .explain-btn:hover{color:var(--cyan);border-color:var(--cyan)}
   /* ── HIDDEN ── */
   .hidden { display: none !important; }
 </style>
@@ -513,6 +569,14 @@
       <div class="nav-item" onclick="switchTab('habits')" id="nav-habits">
         <span class="nav-icon">&#9733;</span> Habits
         <span class="nav-badge" id="habits-streak-badge" style="color:var(--amber)"></span>
+      </div>
+      <div class="nav-item" onclick="switchTab('forecast')" id="nav-forecast">
+        <span class="nav-icon">&#9650;</span> Forecast
+        <span class="nav-badge" id="forecast-risk-badge"></span>
+      </div>
+      <div class="nav-item" onclick="switchTab('briefing')" id="nav-briefing">
+        <span class="nav-icon">&#9788;</span> Briefing
+        <span class="nav-badge" id="briefing-unread-badge" style="display:none;background:var(--cyan-dim);color:var(--cyan)">NEW</span>
       </div>
     </div>
     <div class="sidebar-footer">
@@ -706,6 +770,27 @@
       </div>
     </div>
 
+    <!-- BRIEFING TAB -->
+    <div class="tab-content" id="tab-briefing">
+      <div class="briefing-wrap" id="briefing-content">
+        <div class="empty-state">
+          <div class="empty-icon" style="font-size:40px;opacity:.3">&#9788;</div>
+          <div class="empty-title">Loading briefing...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORECAST TAB -->
+    <div class="tab-content" id="tab-forecast">
+      <div class="forecast-wrap" id="forecast-content">
+        <div class="empty-state">
+          <div class="empty-icon" style="font-size:40px;opacity:.3">&#9650;</div>
+          <div class="empty-title">Loading forecast...</div>
+          <div class="empty-sub">Calculating your workload with ML + DP</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -748,6 +833,7 @@ async function doLogin() {
   loadTasks();
   loadNotes();
   loadHabits(true);
+  checkBriefingUnread();
   showToast('Session initialized ✓', 'success');
 }
 
@@ -788,7 +874,7 @@ function setStatus(online) {
 
 // ─── TABS ────────────────────────────────────────────────────────────
 function switchTab(name) {
-  ['chat','tasks','notes','vision','habits'].forEach(t => {
+  ['chat','tasks','notes','vision','habits','forecast','briefing'].forEach(t => {
     document.getElementById('tab-'+t).classList.remove('active');
     document.getElementById('nav-'+t).classList.remove('active');
   });
@@ -796,6 +882,8 @@ function switchTab(name) {
   document.getElementById('nav-'+name).classList.add('active');
   if (name === 'tasks') { loadTasks(); loadRecurring(); }
   if (name === 'habits') loadHabits();
+  if (name === 'forecast') loadForecast();
+  if (name === 'briefing') loadBriefing();
   if (name === 'notes') loadNotes();
 }
 
@@ -1229,6 +1317,259 @@ function showToast(msg, type = '') {
   d.textContent = msg;
   c.appendChild(d);
   setTimeout(() => d.remove(), 3500);
+}
+
+
+
+// --- BRIEFING ---
+let briefingData = null;
+
+async function loadBriefing(refresh) {
+  refresh = refresh || false;
+  const el = document.getElementById('briefing-content');
+  el.innerHTML = '<div class="empty-state"><div class="spinner" style="width:24px;height:24px;border-width:3px"></div><div class="empty-title" style="margin-top:12px">Generating your briefing...</div></div>';
+  try {
+    const url = API + '/briefing/today' + (refresh ? '?refresh=true' : '');
+    const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!r.ok) { el.innerHTML = '<div class="empty-state"><div class="empty-title">Briefing unavailable</div></div>'; return; }
+    briefingData = await r.json();
+    renderBriefing(briefingData);
+    // Mark as read
+    fetch(API + '/briefing/today/read', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } });
+    document.getElementById('briefing-unread-badge').style.display = 'none';
+  } catch(e) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-title">Error loading briefing</div><div class="empty-sub">' + escHtml(e.message) + '</div></div>';
+  }
+}
+
+function renderBriefing(d) {
+  const el = document.getElementById('briefing-content');
+  const riskColors = {Low:'var(--green)',Medium:'var(--amber)',High:'var(--red)',Critical:'var(--red)'};
+  const riskBorders = {Low:'rgba(104,211,145,.3)',Medium:'rgba(246,173,85,.3)',High:'rgba(252,129,129,.3)',Critical:'var(--red)'};
+  const rc = riskColors[d.risk_label] || 'var(--text2)';
+  const rb = riskBorders[d.risk_label] || 'var(--border)';
+  const trendIcon = {improving:'(up)',stable:'(stable)',declining:'(down)'}[d.completion_trend] || '';
+
+  function taskRow(t) {
+    const pCls = 'priority-badge ' + t.priority.toLowerCase();
+    const due = t.due_date ? ' <span class="briefing-task-due">' + (t.is_overdue ? 'OVERDUE ' : '') + t.due_date + '</span>' : '';
+    return '<div class="briefing-task">' +
+      '<span class="' + pCls + '">' + t.priority + '</span>' +
+      '<div class="briefing-task-title">' + escHtml(t.title) + '</div>' +
+      due + '</div>';
+  }
+
+  let html = '';
+
+  // Greeting
+  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px">';
+  html += '<div>';
+  html += '<div class="briefing-greeting">' + escHtml(d.greeting) + '</div>';
+  html += '<div class="briefing-tip">' + escHtml(d.focus_tip) + '</div>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px;flex-shrink:0">';
+  html += '<button class="refresh-btn" onclick="loadBriefing(true)">Refresh</button>';
+  html += '</div></div>';
+
+  // Risk + trend
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">';
+  html += '<div class="briefing-risk" style="color:' + rc + ';border-color:' + rb + '">';
+  html += 'Workload risk: <strong>' + d.risk_label + '</strong> (' + d.workload_risk + '/100)';
+  html += '</div>';
+  html += '<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">Productivity ' + trendIcon + '</div>';
+  html += '</div>';
+
+  // Metrics
+  html += '<div class="briefing-metrics">';
+  html += '<div class="briefing-metric"><div class="briefing-metric-val">' + d.total_open + '</div><div class="briefing-metric-lbl">OPEN</div></div>';
+  html += '<div class="briefing-metric"><div class="briefing-metric-val" style="color:' + (d.total_overdue > 0 ? 'var(--red)' : 'var(--green)') + '">' + d.total_overdue + '</div><div class="briefing-metric-lbl">OVERDUE</div></div>';
+  html += '<div class="briefing-metric"><div class="briefing-metric-val" style="color:' + (d.p0_p1_count > 0 ? 'var(--amber)' : 'var(--text)') + '">' + d.p0_p1_count + '</div><div class="briefing-metric-lbl">P0/P1</div></div>';
+  html += '<div class="briefing-metric"><div class="briefing-metric-val">' + d.due_today.length + '</div><div class="briefing-metric-lbl">DUE TODAY</div></div>';
+  html += '</div>';
+
+  // Overdue tasks
+  if (d.overdue_tasks.length > 0) {
+    html += '<div class="briefing-section">';
+    html += '<div class="briefing-section-title" style="color:var(--red)">Overdue <span>' + d.overdue_tasks.length + '</span></div>';
+    d.overdue_tasks.slice(0,5).forEach(function(t) { html += taskRow(t); });
+    html += '</div>';
+  }
+
+  // Due today
+  if (d.due_today.length > 0) {
+    html += '<div class="briefing-section">';
+    html += '<div class="briefing-section-title" style="color:var(--amber)">Due today <span>' + d.due_today.length + '</span></div>';
+    d.due_today.forEach(function(t) { html += taskRow(t); });
+    html += '</div>';
+  }
+
+  // Suggested focus
+  if (d.suggested_focus.length > 0) {
+    html += '<div class="briefing-section">';
+    html += '<div class="briefing-section-title" style="color:var(--cyan)">Suggested focus <span>top ' + d.suggested_focus.length + '</span></div>';
+    d.suggested_focus.forEach(function(t) { html += taskRow(t); });
+    html += '</div>';
+  }
+
+  // High priority upcoming
+  if (d.high_priority.length > 0) {
+    html += '<div class="briefing-section">';
+    html += '<div class="briefing-section-title">High priority this week <span>' + d.high_priority.length + '</span></div>';
+    d.high_priority.slice(0,5).forEach(function(t) { html += taskRow(t); });
+    html += '</div>';
+  }
+
+  // Habits
+  if (d.habit_statuses.length > 0) {
+    html += '<div class="briefing-section">';
+    html += '<div class="briefing-section-title">Habits <span>' + d.habit_statuses.length + '</span></div>';
+    d.habit_statuses.forEach(function(h) {
+      const checked = h.checked_today;
+      html += '<div class="briefing-habit">';
+      html += '<div class="habit-streak-mini">' + h.current_streak + '</div>';
+      html += '<div style="flex:1;font-family:var(--font-head);font-size:13px;font-weight:600">' + escHtml(h.title) + '</div>';
+      html += '<span style="font-family:var(--font-mono);font-size:10px;color:' + (checked ? 'var(--green)' : 'var(--text3)') + '">' + (checked ? 'done today' : 'pending') + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// --- FORECAST ---
+let forecastData = null;
+
+async function loadForecast() {
+  const el = document.getElementById('forecast-content');
+  el.innerHTML = '<div class="empty-state"><div class="spinner" style="width:24px;height:24px;border-width:3px"></div><div class="empty-title" style="margin-top:12px">Running workload model...</div><div class="empty-sub" style="margin-top:4px">EWMA + Dynamic Programming</div></div>';
+  try {
+    const r = await fetch(API + '/forecast', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!r.ok) { el.innerHTML = '<div class="empty-state"><div class="empty-icon" style="font-size:40px;opacity:.3">!</div><div class="empty-title">Forecast unavailable</div></div>'; return; }
+    forecastData = await r.json();
+    renderForecast(forecastData);
+    const badge = document.getElementById('forecast-risk-badge');
+    const riskColors = {Low:'var(--green)',Medium:'var(--amber)',High:'var(--red)',Critical:'var(--red)'};
+    badge.textContent = forecastData.risk_label;
+    badge.style.color = riskColors[forecastData.risk_label] || 'var(--text2)';
+  } catch(e) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-title">Error loading forecast</div><div class="empty-sub">' + escHtml(e.message) + '</div></div>';
+  }
+}
+
+function renderForecast(d) {
+  const el = document.getElementById('forecast-content');
+  const riskCls = 'risk-' + d.risk_label;
+  const riskColors = {Low:'var(--green)',Medium:'var(--amber)',High:'var(--red)',Critical:'var(--red)'};
+  const rc = riskColors[d.risk_label] || 'var(--cyan)';
+  const trendCls = 'trend-' + d.completion_rate_trend;
+  const maxLoad = Math.max.apply(null, d.load_scores.concat([d.personal_capacity * 1.5, 1]));
+
+  // Build day bars
+  const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let bars = '';
+  for (let i = 0; i < d.dates.length; i++) {
+    const score = d.load_scores[i];
+    const cap = d.personal_capacity;
+    const pct = Math.min((score / maxLoad) * 100, 100);
+    const overloaded = score > cap * 1.2;
+    const warning = !overloaded && score > cap * 0.8;
+    const barCls = overloaded ? 'day-bar overloaded' : warning ? 'day-bar warning' : 'day-bar';
+    const dayStr = d.dates[i];
+    const dayObj = new Date(dayStr + 'T12:00:00');
+    const dayName = dayNames[dayObj.getDay()];
+    const isToday = dayStr === new Date().toISOString().slice(0,10);
+    bars += '<div class="day-bar-wrap" title="' + dayStr + ': ' + score.toFixed(1) + ' / ' + cap.toFixed(1) + ' units">';
+    bars += '<div class="day-bar-tooltip">' + score.toFixed(1) + '</div>';
+    bars += '<div class="' + barCls + '" style="height:' + pct + '%;' + (isToday ? 'border:1px solid var(--cyan);' : '') + '"></div>';
+    bars += '<div class="day-label" style="' + (isToday ? 'color:var(--cyan);' : '') + '">' + dayName + '</div>';
+    bars += '</div>';
+  }
+
+  // Capacity line indicator text
+  const capPct = Math.min((d.personal_capacity / maxLoad) * 100, 100);
+
+  // Suggestions
+  let suggHTML = '';
+  if (d.reschedule_suggestions.length === 0) {
+    suggHTML = '<div style="font-family:var(--font-mono);font-size:12px;color:var(--green);padding:12px 0">No overloaded days detected. Your schedule looks balanced.</div>';
+  } else {
+    for (let s of d.reschedule_suggestions) {
+      const days = s.days_shifted;
+      const arrow = days > 0 ? '+' + days + ' days &#8594;' : days + ' days &#8592;';
+      suggHTML += '<div class="suggestion-card">';
+      suggHTML += '<div class="suggestion-top">';
+      suggHTML += '<span class="priority-badge ' + s.priority.toLowerCase() + '">' + s.priority + '</span>';
+      suggHTML += '<div class="suggestion-title">' + escHtml(s.task_title) + '</div>';
+      suggHTML += '<span class="arrow-badge">' + s.current_due + ' ' + arrow + ' ' + s.suggested_due + '</span>';
+      suggHTML += '</div>';
+      suggHTML += '<div class="suggestion-reason">' + escHtml(s.reason) + '</div>';
+      suggHTML += '</div>';
+    }
+  }
+
+  el.innerHTML =
+    '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:20px;flex-wrap:wrap">' +
+      '<div class="risk-card ' + riskCls + '">' +
+        '<div class="risk-score" style="color:' + rc + '">' + d.risk_score + '</div>' +
+        '<div class="risk-label" style="color:' + rc + '">RISK SCORE</div>' +
+        '<div style="font-family:var(--font-mono);font-size:12px;color:' + rc + ';font-weight:600;margin-top:4px">' + d.risk_label + '</div>' +
+      '</div>' +
+      '<div class="stat-cards">' +
+        '<div class="stat-card"><div class="stat-val">' + d.open_task_count + '</div><div class="stat-lbl">OPEN TASKS</div></div>' +
+        '<div class="stat-card"><div class="stat-val" style="color:' + (d.overdue_count > 0 ? 'var(--red)' : 'var(--green)') + '">' + d.overdue_count + '</div><div class="stat-lbl">OVERDUE</div></div>' +
+        '<div class="stat-card"><div class="stat-val" style="color:' + (d.p0_p1_count > 0 ? 'var(--amber)' : 'var(--text)') + '">' + d.p0_p1_count + '</div><div class="stat-lbl">P0/P1</div></div>' +
+        '<div class="stat-card"><div class="stat-val" style="color:var(--red)">' + d.overloaded_days + '</div><div class="stat-lbl">OVERLOADED DAYS</div></div>' +
+        '<div class="stat-card"><div class="stat-val">' + d.personal_capacity.toFixed(1) + '</div><div class="stat-lbl">DAILY CAPACITY</div></div>' +
+      '</div>' +
+      '<div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px">' +
+        '<span class="trend-badge ' + trendCls + '">Trend: ' + d.completion_rate_trend + '</span>' +
+        '<button class="explain-btn" onclick="loadForecastExplain()">How is this calculated?</button>' +
+        '<button class="explain-btn" onclick="loadForecast()" style="color:var(--cyan);border-color:var(--cyan)">Refresh</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="chart-card">' +
+      '<div class="chart-title">14-day load forecast <span style="font-weight:400;color:var(--text3);font-size:11px">(capacity = ' + d.personal_capacity.toFixed(1) + ' units/day)</span></div>' +
+      '<div style="position:relative">' +
+        '<div class="day-bars">' + bars + '</div>' +
+        '<div style="display:flex;gap:16px;margin-top:4px;font-family:var(--font-mono);font-size:10px;color:var(--text3)">' +
+          '<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:var(--cyan);border-radius:1px;display:inline-block"></span>Normal</span>' +
+          '<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:var(--amber);border-radius:1px;display:inline-block"></span>High load</span>' +
+          '<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:var(--red);border-radius:1px;display:inline-block"></span>Overloaded</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="chart-card">' +
+      '<div class="chart-title">DP rescheduling suggestions <span style="font-weight:400;color:var(--text3);font-size:11px">(' + d.reschedule_suggestions.length + ' tasks)</span></div>' +
+      suggHTML +
+    '</div>';
+}
+
+async function loadForecastExplain() {
+  try {
+    const r = await fetch(API + '/forecast/explain', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (r.ok) {
+      const d = await r.json();
+      let msg = d.algorithm + ': ';
+      msg += d.steps.slice(0,2).join(' ');
+      showToast(msg, '');
+    }
+  } catch {}
+}
+
+
+async function checkBriefingUnread() {
+  try {
+    const r = await fetch(API + '/briefing/today', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (r.ok) {
+      const d = await r.json();
+      if (!d.is_read) {
+        document.getElementById('briefing-unread-badge').style.display = '';
+      }
+    }
+  } catch {}
 }
 
 // --- HABITS ---
