@@ -20,13 +20,15 @@ class UserClaims(BaseModel):
     user_id: str
     role: UserRole
     email: Optional[EmailStr] = None
+    name: Optional[str] = None
 
     class Config:
         json_schema_extra = {
             "example": {
                 "user_id": "user123",
                 "role": "user",
-                "email": "john@example.com"
+                "email": "john@example.com",
+                "name": "John Doe"
             }
         }
 
@@ -35,6 +37,7 @@ class User(BaseModel):
     """Full user record"""
     user_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: EmailStr
+    name: str
     hashed_password: str
     role: UserRole = UserRole.USER
     api_keys: list[str] = Field(default_factory=list)
@@ -49,6 +52,7 @@ class User(BaseModel):
             "example": {
                 "user_id": "user123",
                 "email": "john@example.com",
+                "name": "John Doe",
                 "role": "user",
                 "briefing_time": "08:00",
                 "is_active": True
@@ -59,6 +63,7 @@ class User(BaseModel):
 class UserCreate(BaseModel):
     """Model for creating a new user"""
     email: EmailStr
+    name: str
     password: str
     role: UserRole = UserRole.USER
 
@@ -74,7 +79,10 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
-    user: UserClaims
+    user_id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
+    role: str
 
 
 class APIKeyCreate(BaseModel):

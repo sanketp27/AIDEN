@@ -31,7 +31,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(user_id: str, role: UserRole, email: Optional[str] = None) -> tuple[str, int]:
+def create_access_token(
+    user_id: str,
+    role: UserRole,
+    email: Optional[str] = None,
+    name: Optional[str] = None,
+) -> tuple[str, int]:
     """Create JWT access token"""
     now = datetime.now(timezone.utc)
     expire = now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
@@ -40,8 +45,9 @@ def create_access_token(user_id: str, role: UserRole, email: Optional[str] = Non
         "sub": user_id,
         "role": role.value,
         "email": email,
+        "name": name,
         "exp": expire,
-        "iat": now
+        "iat": now,
     }
 
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
@@ -57,12 +63,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         payload = jwt.decode(
             credentials.credentials,
             settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM]
+            algorithms=[settings.JWT_ALGORITHM],
         )
 
         user_id = payload.get("sub")
-        role = payload.get("role", "user")
-        email = payload.get("email")
+        role    = payload.get("role", "user")
+        email   = payload.get("email")
+        name    = payload.get("name")
 
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
@@ -70,7 +77,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return UserClaims(
             user_id=user_id,
             role=UserRole(role),
-            email=email
+            email=email,
+            name=name,
         )
 
     except JWTError as e:

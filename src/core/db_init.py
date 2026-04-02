@@ -15,6 +15,7 @@ COLL_SESSIONS      = "adk_sessions"
 COLL_USERS         = "users"
 COLL_RECURRING     = "recurring_tasks"          # recurring task templates
 COLL_GMAIL_PROC    = "gmail_processed"            # idempotency log for Gmail pipeline
+COLL_JWT_TOKENS    = "jwt_tokens"                 # active JWT tokens with TTL
 # Per-user task/note collections follow: {user_id}__tasks, {user_id}__notes
 
 
@@ -91,10 +92,11 @@ RECURRING_TASK_SCHEMA = {
 USER_SCHEMA = {
     "$jsonSchema": {
         "bsonType": "object",
-        "required": ["user_id", "email", "hashed_password"],
+        "required": ["user_id", "email", "name", "hashed_password"],
         "properties": {
             "user_id":          {"bsonType": "string"},
             "email":            {"bsonType": "string"},
+            "name":             {"bsonType": "string"},
             "hashed_password":  {"bsonType": "string"},
             "role":             {"bsonType": "string", "enum": ["executive","user","developer"]},
             "api_keys":         {"bsonType": "array"},
@@ -103,6 +105,20 @@ USER_SCHEMA = {
             "is_active":        {"bsonType": "bool"},
             "created_at":       {"bsonType": "date"},
             "updated_at":       {"bsonType": "date"},
+        }
+    }
+}
+
+JWT_TOKEN_SCHEMA = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["user_id", "token", "expires_at", "created_at"],
+        "properties": {
+            "user_id":    {"bsonType": "string"},
+            "token":      {"bsonType": "string"},
+            "expires_at": {"bsonType": "date"},
+            "created_at": {"bsonType": "date"},
+            "revoked":    {"bsonType": "bool"},
         }
     }
 }
@@ -159,6 +175,7 @@ async def _ensure_collection(db, name: str, schema: dict | None = None):
 async def _ensure_global_indexes(db):
     """Create indexes on global (non-per-user) collections."""
 
+    # ── sessions ────────────────────────────────────────────────────────────
     sessions = db[COLL_SESSIONS]
     await sessions.create_index(
         [("session_id", ASCENDING), ("app_name", ASCENDING), ("user_id", ASCENDING)],
@@ -185,6 +202,15 @@ async def _ensure_global_indexes(db):
     )
     await gmail_proc.create_index([("processed_at", DESCENDING)], background=True)
 
+    jwt_tokens = db[COLL_JWT_TOKENS]
+    await jwt_tokens.create_index([("user_id", ASCENDING)], background=True)
+    await jwt_tokens.create_index([("token", ASCENDING)], unique=True, background=True)
+    # MongoDB TTL index: documents are automatically removed after expires_at
+    await jwt_tokens.create_index(
+        [("expires_at", ASCENDING)],
+        expireAfterSeconds=0, background=True, name="idx_jwt_ttl"
+    )
+
     log.info("global_indexes_ensured")
 
 
@@ -203,6 +229,7 @@ async def initialize_database():
     await _ensure_collection(db, COLL_USERS,    USER_SCHEMA)
     await _ensure_collection(db, COLL_RECURRING, RECURRING_TASK_SCHEMA)
     await _ensure_collection(db, COLL_GMAIL_PROC, GMAIL_PROCESSED_SCHEMA)
+    await _ensure_collection(db, COLL_JWT_TOKENS, JWT_TOKEN_SCHEMA)
 
     await _ensure_global_indexes(db)
 

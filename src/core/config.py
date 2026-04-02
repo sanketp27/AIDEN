@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # === Telegram Bot ===
     TELEGRAM_BOT_TOKEN: str = ""              # BotFather token; empty = disabled
     AIDEN_API_URL:      str = "http://localhost:8000"
+    AIDEN_UI_URL:       str = "http://localhost:3000"  # Frontend URL (used for OAuth redirects)
 
     # === Google Cloud (placeholder for P3+) ===
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
