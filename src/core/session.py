@@ -1,4 +1,4 @@
-from google.adk.sessions import BaseSessionService, Session
+zfrom google.adk.sessions import BaseSessionService, Session
 from google.adk.events import Event
 from motor.motor_asyncio import AsyncIOMotorClient
 from src.core.config import settings
@@ -26,9 +26,6 @@ class MongoDBSessionService(BaseSessionService):
         self.sessions = self.db.adk_sessions
         log.info("mongodb_session_service_initialized", db=settings.MONGO_DB)
 
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
 
     def _make_mongo_safe(self, obj):
         """Recursively convert types MongoDB cannot encode (set -> list)."""
@@ -75,10 +72,6 @@ class MongoDBSessionService(BaseSessionService):
             events=events,
             last_update_time=doc.get("last_update_time", 0.0),
         )
-
-    # ------------------------------------------------------------------ #
-    # BaseSessionService interface                                         #
-    # ------------------------------------------------------------------ #
 
     async def create_session(
         self,

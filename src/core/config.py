@@ -44,9 +44,11 @@ class Settings(BaseSettings):
     AIDEN_API_URL:      str = "http://localhost:8000"
     AIDEN_UI_URL:       str = "http://localhost:3000"  # Frontend URL (used for OAuth redirects)
 
-    # === Google Cloud (placeholder for P3+) ===
+    # === Google Cloud / Vertex AI ===
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
-    GCP_PROJECT_ID: Optional[str] = None
+    GCP_PROJECT_ID:        Optional[str] = None   # legacy alias kept for compat
+    GOOGLE_CLOUD_PROJECT:  Optional[str] = None   # canonical GCP project ID
+    GOOGLE_CLOUD_LOCATION: str           = "us-central1"
 
     # === Environment ===
     ENV: Literal["development", "production", "test"] = "development"

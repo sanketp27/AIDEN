@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits, forecast, briefing, gmail, auth, preferences, sessions
+from src.api.routers import chat, tasks, notes, voice, vision, voice_ws, habits, forecast, briefing, gmail, auth, preferences, sessions, demo
 from src.core.config import settings
 import structlog
 import time
@@ -34,6 +34,14 @@ async def lifespan(app: FastAPI):
     import os
     os.environ.setdefault("GOOGLE_API_KEY", settings.GEMINI_API_KEY)
     os.environ.setdefault("GEMINI_API_KEY", settings.GEMINI_API_KEY)
+
+    _gcp_project = settings.GOOGLE_CLOUD_PROJECT or settings.GCP_PROJECT_ID
+    if _gcp_project:
+        from src.core.vertex_init import init_vertex
+        init_vertex(project_id=_gcp_project, location=settings.GOOGLE_CLOUD_LOCATION)
+        log.info("vertex_ai_enabled", project=_gcp_project)
+    else:
+        log.info("vertex_ai_skipped", reason="GOOGLE_CLOUD_PROJECT not set — using direct Gemini API")
 
     # Initialize database collections + indexes
     from src.core.db_init import initialize_database
@@ -72,7 +80,6 @@ async def lifespan(app: FastAPI):
     log.info("aiden_api_shutting_down")
 
 
-# Create FastAPI app
 app = FastAPI(
     title="AIDEN v2.0 API",
     description="AI Intelligent Daily Executive Navigator - Multi-agent productivity system",
@@ -106,7 +113,6 @@ app.add_middleware(
 )
 
 
-# Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all requests with timing"""
@@ -156,9 +162,9 @@ app.include_router(gmail.router)
 app.include_router(auth.router)
 app.include_router(preferences.router)
 app.include_router(sessions.router)
+app.include_router(demo.router)
 
 
-# Health check endpoint
 @app.get("/health", tags=["System"])
 async def health_check():
     """Health check endpoint for Docker and monitoring"""
@@ -184,7 +190,6 @@ async def health_check():
     }
 
 
-# Root endpoint
 @app.get("/", tags=["System"])
 async def root():
     """API root endpoint"""
@@ -196,7 +201,6 @@ async def root():
     }
 
 
-# Run with uvicorn
 if __name__ == "__main__":
     import uvicorn
 
