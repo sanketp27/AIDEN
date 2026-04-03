@@ -1,7 +1,7 @@
 """
 CalendarBot Agent — Google Calendar via direct REST API
 ========================================================
-Replaces the dead localhost:3000 MCP URL with real @tool functions
+Replaces the dead localhost:3000 MCP URL with real functions
 that call the Google Calendar API v3 directly.
 
 OAuth setup (one-time per user):
@@ -19,15 +19,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from google.adk.agents import Agent
-from google.adk.tools import tool
-
 from src.core.config import settings
 from src.services.google_calendar import get_calendar_client
 
-os.environ.setdefault("GOOGLE_API_KEY",  settings.GEMINI_API_KEY)
-os.environ.setdefault("GEMINI_API_KEY",  settings.GEMINI_API_KEY)
+os.environ.setdefault("GOOGLE_API_KEY", settings.GEMINI_API_KEY)
+os.environ.setdefault("GEMINI_API_KEY", settings.GEMINI_API_KEY)
 
-@tool
+
 async def get_todays_calendar(user_id: str) -> dict:
     """
     Return all calendar events for today.
@@ -42,7 +40,8 @@ async def get_todays_calendar(user_id: str) -> dict:
     if not client:
         return {
             "error": "Google Calendar not connected. Ask the user to go to Settings → Connect Google Calendar.",
-            "events": [], "count": 0,
+            "events": [],
+            "count": 0,
         }
 
     try:
@@ -53,22 +52,14 @@ async def get_todays_calendar(user_id: str) -> dict:
         return {"error": str(exc), "events": [], "count": 0}
 
 
-@tool
+
 async def get_weeks_calendar(user_id: str) -> dict:
-    """
-    Return all calendar events for the next 7 days.
-
-    Args:
-        user_id: The authenticated user's ID.
-
-    Returns:
-        dict with 'events' list grouped implicitly by date.
-    """
     client = await get_calendar_client(user_id)
     if not client:
         return {
             "error": "Google Calendar not connected. Ask the user to go to Settings → Connect Google Calendar.",
-            "events": [], "count": 0,
+            "events": [],
+            "count": 0,
         }
 
     try:
@@ -79,15 +70,15 @@ async def get_weeks_calendar(user_id: str) -> dict:
         return {"error": str(exc), "events": [], "count": 0}
 
 
-@tool
+
 async def create_calendar_event(
-    user_id:          str,
-    title:            str,
-    start_iso:        str,
-    end_iso:          str,
-    description:      str = "",
-    attendee_emails:  list[str] | None = None,
-    location:         str = "",
+    user_id: str,
+    title: str,
+    start_iso: str,
+    end_iso: str,
+    description: str = "",
+    attendee_emails: list[str] | None = None,
+    location: str = "",
 ) -> dict:
     """
     Create a new Google Calendar event.
@@ -110,9 +101,8 @@ async def create_calendar_event(
 
     try:
         start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
-        end   = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
 
-        # Check for conflicts first
         conflicts = await client.check_conflicts(start, end)
         if conflicts:
             conflict_titles = [c.get("summary", "Unknown") for c in conflicts[:3]]
@@ -123,27 +113,31 @@ async def create_calendar_event(
             }
 
         event = await client.create_event(
-            title=title, start=start, end=end,
+            title=title,
+            start=start,
+            end=end,
             description=description,
             attendees=attendee_emails,
             location=location,
         )
+
         return {
-            "event_id":  event.get("id"),
-            "title":     event.get("summary"),
-            "start":     event.get("start", {}).get("dateTime"),
-            "end":       event.get("end",   {}).get("dateTime"),
+            "event_id": event.get("id"),
+            "title": event.get("summary"),
+            "start": event.get("start", {}).get("dateTime"),
+            "end": event.get("end", {}).get("dateTime"),
             "html_link": event.get("htmlLink"),
-            "conflict":  False,
+            "conflict": False,
         }
+
     except Exception as exc:
         return {"error": str(exc)}
 
 
-@tool
+
 async def find_free_slots(
-    user_id:          str,
-    date_iso:         str,
+    user_id: str,
+    date_iso: str,
     duration_minutes: int = 60,
 ) -> dict:
     """
@@ -169,7 +163,7 @@ async def find_free_slots(
         return {"error": str(exc), "free_slots": []}
 
 
-@tool
+
 async def delete_calendar_event(user_id: str, event_id: str) -> dict:
     """
     Delete a calendar event by its ID.
@@ -193,23 +187,24 @@ async def delete_calendar_event(user_id: str, event_id: str) -> dict:
 
 
 def _simplify(event: dict) -> dict:
-    """Flatten a raw Google Calendar event into a clean summary dict."""
     start = event.get("start", {})
-    end   = event.get("end",   {})
+    end = event.get("end", {})
     attendees = [
-        a.get("email", "") for a in event.get("attendees", [])
+        a.get("email", "")
+        for a in event.get("attendees", [])
         if not a.get("self", False)
     ]
+
     return {
-        "event_id":    event.get("id"),
-        "title":       event.get("summary", "(No title)"),
-        "start":       start.get("dateTime", start.get("date", "")),
-        "end":         end.get("dateTime",   end.get("date",   "")),
+        "event_id": event.get("id"),
+        "title": event.get("summary", "(No title)"),
+        "start": start.get("dateTime", start.get("date", "")),
+        "end": end.get("dateTime", end.get("date", "")),
         "description": event.get("description", ""),
-        "location":    event.get("location", ""),
-        "attendees":   attendees,
-        "html_link":   event.get("htmlLink", ""),
-        "status":      event.get("status", ""),
+        "location": event.get("location", ""),
+        "attendees": attendees,
+        "html_link": event.get("htmlLink", ""),
+        "status": event.get("status", ""),
     }
 
 
@@ -243,6 +238,7 @@ OUTPUT FORMAT:
 IMPORTANT: Always pass the user_id field to every tool call.
 The user_id comes from the session context — use it exactly as provided.
 """
+
 
 calendar_bot_agent = Agent(
     name="calendar_bot",
