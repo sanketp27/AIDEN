@@ -46,6 +46,7 @@ from src.services.gmail_direct import (
     OAUTH_TOKEN_URL,
     cred_store,
 )
+from src.services.google_calendar import CALENDAR_SCOPES
 from src.repositories.prefs_repo import prefs_repo
 from src.models.user_prefs import UserPreferencesUpdate
 
@@ -141,11 +142,14 @@ async def logout(current_user: UserClaims = Depends(get_current_active_user)) ->
     return {"status": "logged_out", "tokens_revoked": revoked}
 
 
+# ── Current user info ─────────────────────────────────────────────────────────
+
 @router.get("/me")
 async def get_me(current_user: UserClaims = Depends(get_current_active_user)) -> dict:
     """Returns current user info + integration connection status."""
     prefs       = await prefs_repo.get_or_create(current_user.user_id)
     gmail_creds = await cred_store.load(current_user.user_id, "gmail")
+    cal_creds   = await cred_store.load(current_user.user_id, "calendar")
 
     from src.integrations.telegram_bot import _sessions
     tg_session = None
@@ -168,6 +172,10 @@ async def get_me(current_user: UserClaims = Depends(get_current_active_user)) ->
                 "poll_interval_minutes": prefs.gmail.poll_interval_minutes,
                 "ignored_senders":       prefs.gmail.ignored_senders,
                 "ignored_domains":       prefs.gmail.ignored_domains,
+            },
+            "calendar": {
+                "connected":    cal_creds is not None,
+                "connected_at": None,
             },
             "telegram": {
                 "connected":    tg_session is not None,
@@ -313,4 +321,100 @@ async def gmail_disconnect(
         UserPreferencesUpdate.model_validate({"gmail": {"connected_email": None, "enabled": False}}),
     )
     log.info("gmail_disconnected", user_id=current_user.user_id)
+    return {"status": "disconnected", "user_id": current_user.user_id}
+
+
+@router.get("/calendar")
+async def calendar_oauth_start(
+    request: Request,
+    bearer: Optional[str] = None,
+    current_user: Optional[UserClaims] = None,
+) -> RedirectResponse:
+    """
+    Step 1: redirect browser to Google consent screen for Calendar access.
+    Accepts ?bearer=<token> for browser-redirect flow (same pattern as Gmail).
+    """
+    if current_user is None:
+        if not bearer:
+            raise HTTPException(401, "Authentication required.")
+        from jose import jwt as jose_jwt
+        from src.models.user import UserRole
+        try:
+            payload = jose_jwt.decode(bearer, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            current_user = UserClaims(
+                user_id=payload["sub"],
+                role=UserRole(payload.get("role", "user")),
+                email=payload.get("email"),
+                name=payload.get("name"),
+            )
+        except Exception:
+            raise HTTPException(401, "Invalid or expired token.")
+
+    if not settings.GMAIL_CLIENT_ID:
+        raise HTTPException(501, "Google OAuth not configured. Add GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET to .env.")
+
+    redirect_uri = f"{settings.AIDEN_API_URL}/auth/calendar/callback"
+    # Request both Gmail + Calendar scopes together for a unified consent screen
+    all_scopes = GMAIL_SCOPES + CALENDAR_SCOPES
+    params = {
+        "client_id":     settings.GMAIL_CLIENT_ID,
+        "redirect_uri":  redirect_uri,
+        "response_type": "code",
+        "scope":         " ".join(all_scopes),
+        "access_type":   "offline",
+        "prompt":        "consent",
+        "state":         current_user.user_id,
+    }
+    url = OAUTH_AUTH_URL + "?" + urlencode(params)
+    log.info("calendar_oauth_start", user_id=current_user.user_id)
+    return RedirectResponse(url)
+
+
+@router.get("/calendar/callback")
+async def calendar_oauth_callback(code: str, state: str, request: Request) -> RedirectResponse:
+    """
+    Step 2: Google redirects here. Exchange code → tokens → persist → redirect to UI.
+    """
+    user_id      = state
+    redirect_uri = f"{settings.AIDEN_API_URL}/auth/calendar/callback"
+    ui_base      = settings.AIDEN_UI_URL.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(OAUTH_TOKEN_URL, data={
+                "code":          code,
+                "client_id":     settings.GMAIL_CLIENT_ID,
+                "client_secret": settings.GMAIL_CLIENT_SECRET,
+                "redirect_uri":  redirect_uri,
+                "grant_type":    "authorization_code",
+            })
+
+        if resp.status_code != 200:
+            log.error("calendar_token_exchange_failed", status=resp.status_code)
+            return RedirectResponse(f"{ui_base}/?calendar=error&reason=token_exchange_failed")
+
+        tokens = resp.json()
+        creds = {
+            "access_token":  tokens["access_token"],
+            "refresh_token": tokens.get("refresh_token", ""),
+            "expires_at":    time.time() + tokens.get("expires_in", 3600),
+        }
+
+        await cred_store.save(user_id, "calendar", creds)
+        log.info("calendar_oauth_complete", user_id=user_id)
+
+        return RedirectResponse(f"{ui_base}/?calendar=connected")
+
+    except Exception as exc:
+        log.error("calendar_oauth_callback_error", error=str(exc))
+        return RedirectResponse(f"{ui_base}/?calendar=error&reason=internal_error")
+
+
+@router.delete("/calendar")
+async def calendar_disconnect(
+    current_user: UserClaims = Depends(get_current_active_user),
+) -> dict:
+    """Remove stored Calendar credentials."""
+    await cred_store.delete(current_user.user_id, "calendar")
+    log.info("calendar_disconnected", user_id=current_user.user_id)
     return {"status": "disconnected", "user_id": current_user.user_id}

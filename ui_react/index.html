@@ -245,7 +245,218 @@
 
   /* typing indicator */
   .typing-indicator { display: flex; align-items: center; gap: 4px; padding: 14px 16px; }
+
+  /* ── AGENT TRACE PANEL ── */
+  .trace-panel {
+    margin-top: 8px; border-radius: 6px;
+    border: 1px solid var(--border); overflow: hidden;
+    font-family: var(--font-mono);
+  }
+  .trace-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; cursor: pointer;
+    background: var(--bg3); border-bottom: 1px solid var(--border);
+    font-size: 10px; letter-spacing: .1em; color: var(--text2);
+    user-select: none; transition: background .15s;
+  }
+  .trace-header:hover { background: var(--bg4); }
+  .trace-chevron { margin-left: auto; transition: transform .2s; }
+  .trace-panel.open .trace-chevron { transform: rotate(180deg); }
+  .trace-body { display: none; padding: 10px 0; background: var(--bg2); }
+  .trace-panel.open .trace-body { display: block; }
+  .trace-step {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 5px 14px; font-size: 10px; line-height: 1.5;
+    transition: background .12s;
+  }
+  .trace-step:hover { background: var(--bg3); }
+  .trace-step-icon {
+    font-size: 12px; flex-shrink: 0; margin-top: 1px;
+    width: 16px; text-align: center;
+  }
+  .trace-step-body { flex: 1; min-width: 0; }
+  .trace-step-agent {
+    font-size: 9px; letter-spacing: .12em; font-weight: 700;
+    margin-bottom: 1px; opacity: .6;
+  }
+  .trace-step-summary { color: var(--text2); word-break: break-all; }
+  .trace-step-ms {
+    flex-shrink: 0; font-size: 9px; color: var(--text3); margin-top: 1px;
+  }
+  /* Step kind colour lines */
+  .trace-step.kind-routing    { border-left: 2px solid rgba(99,179,237,.4); }
+  .trace-step.kind-tool_call  { border-left: 2px solid rgba(246,173,85,.4); }
+  .trace-step.kind-tool_result{ border-left: 2px solid rgba(104,211,145,.4); }
+  .trace-step.kind-response   { border-left: 2px solid rgba(99,179,237,.7); }
+  .trace-step.kind-thinking   { border-left: 2px solid rgba(74,85,104,.4); }
+  /* Agent colour tokens */
+  .ac-cyan   { color: var(--cyan); }
+  .ac-amber  { color: var(--amber); }
+  .ac-blue   { color: #90cdf4; }
+  .ac-purple { color: var(--purple); }
+  .ac-green  { color: var(--green); }
+  .ac-coral  { color: var(--red); }
+  .ac-gray   { color: var(--text3); }
+
+  /* ── HISTORY TAB ── */
+  .history-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 12px; overflow: hidden;
+    transition: border-color .15s;
+  }
+  .history-card:hover { border-color: var(--border2); }
+  .history-card-hdr {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; cursor: pointer;
+  }
+  .history-card-title {
+    font-family: var(--font-body); font-size: 13px;
+    color: var(--text); flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .history-card-meta {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--text3); white-space: nowrap;
+  }
+  .history-agents { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 16px 12px; }
+  .history-agent-pill {
+    font-family: var(--font-mono); font-size: 8px; letter-spacing: .08em;
+    padding: 2px 7px; border-radius: 3px;
+    background: var(--bg4); border: 1px solid var(--border); color: var(--text2);
+  }
+  .history-steps-panel { border-top: 1px solid var(--border); display: none; }
+  .history-steps-panel.open { display: block; }
+  /* Live agent pill shown inside typing bubble */
+  .live-agent-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
+    padding: 3px 9px; border-radius: 4px;
+    background: var(--bg4); border: 1px solid var(--border2);
+    color: var(--cyan); margin-top: 6px;
+    animation: pillIn .2s ease;
+  }
+  @keyframes pillIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  .live-agent-dot { width:6px; height:6px; border-radius:50%; background:currentColor; animation: pulse 1s ease-in-out infinite; }
   .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); opacity: 0.4; animation: typing 1.2s ease-in-out infinite; }
+
+  /* ── LIVE TRACE DRAWER ─────────────────────────────────────────────────── */
+  #live-trace-drawer {
+    display: none;
+    flex-direction: column;
+    margin: 0 24px 0;
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    background: var(--bg2);
+    overflow: hidden;
+    flex-shrink: 0;
+    max-height: 280px;
+    transition: max-height 0.4s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 4px 24px rgba(99,179,237,0.06);
+  }
+  #live-trace-drawer.visible { display: flex; }
+  #live-trace-drawer.collapsed { max-height: 42px; }
+
+  #ltd-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s;
+  }
+  #ltd-header:hover { background: var(--bg4); }
+
+  #ltd-spinner {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
+    flex-shrink: 0;
+    animation: pulse 1s ease-in-out infinite;
+  }
+  #ltd-spinner.done {
+    animation: none;
+    background: var(--green);
+    box-shadow: 0 0 4px var(--green);
+  }
+
+  #ltd-agent-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .08em;
+    color: var(--cyan);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color .2s;
+  }
+  #ltd-agent-label.done { color: var(--green); }
+
+  #ltd-step-count {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: .06em;
+  }
+
+  #ltd-chevron {
+    font-size: 9px;
+    color: var(--text3);
+    transition: transform .25s;
+    flex-shrink: 0;
+  }
+  #live-trace-drawer.collapsed #ltd-chevron { transform: rotate(-90deg); }
+
+  #ltd-steps {
+    overflow-y: auto;
+    flex: 1;
+    padding: 6px 0;
+  }
+  #ltd-steps::-webkit-scrollbar { width: 3px; }
+  #ltd-steps::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .ltd-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 5px 14px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    line-height: 1.5;
+    border-left: 2px solid transparent;
+    animation: ltdStepIn .22s ease;
+    transition: background .12s;
+  }
+  .ltd-step:hover { background: var(--bg3); }
+  @keyframes ltdStepIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .ltd-step.kind-routing     { border-left-color: rgba(99,179,237,.5); }
+  .ltd-step.kind-tool_call   { border-left-color: rgba(246,173,85,.5); }
+  .ltd-step.kind-tool_result { border-left-color: rgba(104,211,145,.5); }
+  .ltd-step.kind-thinking    { border-left-color: rgba(74,85,104,.4); }
+  .ltd-step.kind-response    { border-left-color: rgba(99,179,237,.8); }
+
+  .ltd-step-icon { font-size: 11px; width: 14px; flex-shrink: 0; margin-top: 1px; text-align: center; }
+  .ltd-step-body { flex: 1; min-width: 0; }
+  .ltd-step-agent { font-size: 8px; letter-spacing: .12em; font-weight: 700; opacity: .55; margin-bottom: 1px; }
+  .ltd-step-summary { color: var(--text2); word-break: break-all; }
+  .ltd-step-ms { flex-shrink: 0; font-size: 9px; color: var(--text3); margin-top: 1px; }
+
+  /* Agent pill badges in done state header */
+  .ltd-agent-pill {
+    font-family: var(--font-mono);
+    font-size: 8px; letter-spacing: .08em;
+    padding: 1px 6px; border-radius: 3px;
+    background: var(--bg4); border: 1px solid var(--border);
+    color: var(--text2);
+  }
   .typing-dot:nth-child(2) { animation-delay: 0.2s; }
   .typing-dot:nth-child(3) { animation-delay: 0.4s; }
   @keyframes typing { 0%,100%{opacity:.4;transform:translateY(0)} 50%{opacity:1;transform:translateY(-4px)} }
@@ -285,6 +496,18 @@
     color: var(--text2); cursor: pointer; transition: all 0.15s;
   }
   .quick-btn:hover { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
+  .workflow-btn {
+    background: linear-gradient(135deg, var(--bg3) 0%, var(--bg4) 100%);
+    border-color: var(--border2); color: var(--text);
+    position: relative; overflow: hidden;
+  }
+  .workflow-btn:hover { border-color: var(--cyan); background: var(--cyan-dim); color: var(--cyan); }
+  .workflow-btn::before {
+    content: 'MULTI-AGENT'; position: absolute; top: 3px; right: 6px;
+    font-family: var(--font-mono); font-size: 7px; letter-spacing: .1em;
+    color: var(--text3); opacity: .7;
+  }
+  .wf-icon { color: var(--cyan); font-size: 13px; }
 
   /* ── TASKS TAB ── */
   .tasks-layout { flex: 1; display: flex; overflow: hidden; }
@@ -634,6 +857,9 @@
       <div class="nav-item" onclick="switchTab('settings')" id="nav-settings">
         <span class="nav-icon">⚙</span> Settings
       </div>
+      <div class="nav-item" onclick="switchTab('history')" id="nav-history">
+        <span class="nav-icon">⏱</span> History
+      </div>
     </div>
     <div class="sidebar-footer">
       <div class="user-chip">
@@ -653,11 +879,40 @@
     <!-- CHAT TAB -->
     <div class="tab-content active" id="tab-chat">
       <div class="quick-prompts">
+        <div style="width:100%;display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.15em;color:var(--text3)">WORKFLOW SCENARIOS</span>
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+        </div>
+        <button class="quick-btn workflow-btn" onclick="runWorkflow('plan_week')" title="Triggers: Orchestrator → TaskMaster → CalendarBot → NoteKeeper">
+          <span class="wf-icon">◈</span> Plan my week
+        </button>
+        <button class="quick-btn workflow-btn" onclick="runWorkflow('prep_meeting')" title="Triggers: CalendarBot → NoteKeeper → TaskMaster">
+          <span class="wf-icon">◷</span> Prepare for my next meeting
+        </button>
+        <button class="quick-btn workflow-btn" onclick="runWorkflow('inbox')" title="Triggers: Gmail → Orchestrator → TaskMaster × N">
+          <span class="wf-icon">✉</span> Process my inbox
+        </button>
+        <div style="width:100%;display:flex;align-items:center;gap:8px;margin-top:6px;margin-bottom:2px">
+          <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.15em;color:var(--text3)">QUICK ACTIONS</span>
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+        </div>
         <button class="quick-btn" onclick="sendQuick('What tasks do I have today?')">📋 Today's tasks</button>
         <button class="quick-btn" onclick="sendQuick('Show me my recent notes')">📝 Recent notes</button>
-        <button class="quick-btn" onclick="sendQuick('What is on my schedule this week?')">📅 This week</button>
-        <button class="quick-btn" onclick="sendQuick('Create a high priority task: Review project proposal')">⚡ Quick task</button>
+        <button class="quick-btn" onclick="sendQuick('What is my workload forecast for this week?')">📊 Forecast</button>
+        <button class="quick-btn" onclick="sendQuick('Give me my daily briefing')">🌅 Briefing</button>
       </div>
+
+      <!-- ── LIVE TRACE DRAWER ─────────────────────────────────────────────── -->
+      <div id="live-trace-drawer">
+        <div id="ltd-header" onclick="toggleLiveTrace()">
+          <div id="ltd-spinner"></div>
+          <span id="ltd-agent-label">Initialising…</span>
+          <span id="ltd-step-count"></span>
+          <span id="ltd-chevron">▾</span>
+        </div>
+        <div id="ltd-steps"></div>
+      </div>
+
       <div class="chat-wrap" id="chat-messages">
         <div class="msg ai">
           <div class="msg-avatar ai">A</div>
@@ -876,6 +1131,52 @@
           </div>
         </div>
 
+        <!-- Google Calendar Card -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+            <div style="font-size:22px;">📅</div>
+            <div>
+              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Google Calendar</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Read &amp; create events, detect conflicts, find free slots</div>
+            </div>
+            <div id="cal-status-badge" style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">NOT CONNECTED</div>
+          </div>
+          <div id="cal-connected-info" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+            ✓ Calendar access granted
+          </div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:12px;line-height:1.6;">
+            Requires Google OAuth. Uses the same Google account as Gmail.<br/>
+            Add <code style="color:var(--cyan)">https://www.googleapis.com/auth/calendar</code> to your OAuth client scopes.
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button id="cal-connect-btn" class="btn-primary" style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;" onclick="connectCalendar()">
+              Connect Google Calendar
+            </button>
+            <button id="cal-disconnect-btn" class="btn-primary" style="margin-top:0;display:none;width:auto;padding:10px 20px;font-size:12px;background:var(--red);color:#fff;" onclick="disconnectCalendar()">
+              Disconnect
+            </button>
+          </div>
+        </div>
+
+        <!-- Telegram Card -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div style="font-size:22px;">✈️</div>
+            <div>
+              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Telegram Bot</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Chat with AIDEN from anywhere via Telegram</div>
+            </div>
+            <div id="tg-status-badge" style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">NOT LINKED</div>
+          </div>
+          <div id="tg-connected-info" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+            Linked · Chat ID: <span id="tg-chat-id" style="color:var(--cyan)"></span>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);line-height:1.6;">
+            Set <code style="color:var(--cyan)">TELEGRAM_BOT_TOKEN</code> in .env, then send
+            <code style="color:var(--cyan)">/start &lt;your-jwt-token&gt;</code> to your bot on Telegram.
+          </div>
+        </div>
+
         <!-- Account Info Card -->
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
           <div style="font-family:var(--font-head);font-size:14px;font-weight:600;margin-bottom:12px;">Account</div>
@@ -905,6 +1206,28 @@
           <button class="btn-primary" style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;background:transparent;border:1px solid var(--red);color:var(--red);" onclick="doLogout()">
             Sign Out
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY TAB -->
+    <div class="tab-content" id="tab-history">
+      <div style="flex:1;overflow-y:auto;padding:24px;">
+        <div style="max-width:720px;margin:0 auto">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+            <div>
+              <div style="font-family:var(--font-head);font-size:20px;font-weight:700">Workflow History</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.1em">// AGENT EXECUTION LOG</div>
+            </div>
+            <button onclick="loadHistory()" style="margin-left:auto;background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:7px 14px;border-radius:6px;font-family:var(--font-mono);font-size:10px;cursor:pointer;letter-spacing:.08em">↻ REFRESH</button>
+          </div>
+          <div id="history-list">
+            <div class="empty-state">
+              <div class="empty-icon" style="font-size:32px;opacity:.3">⏱</div>
+              <div class="empty-title">No history yet</div>
+              <div class="empty-sub">Start a conversation to see execution traces here</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1096,11 +1419,18 @@ function _checkGmailCallbackParam() {
   if (params.get('gmail') === 'connected') {
     const email = params.get('email') || '';
     showToast(`Gmail connected${email ? ': ' + email : ''} ✓`, 'success');
-    // Clean URL without reload
     window.history.replaceState({}, '', window.location.pathname);
-    loadMe();   // refresh integration status
+    loadMe();
   } else if (params.get('gmail') === 'error') {
     showToast('Gmail connection failed. Please try again.', 'error');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+  if (params.get('calendar') === 'connected') {
+    showToast('Google Calendar connected ✓', 'success');
+    window.history.replaceState({}, '', window.location.pathname);
+    loadMe();
+  } else if (params.get('calendar') === 'error') {
+    showToast('Calendar connection failed. Check your OAuth scopes.', 'error');
     window.history.replaceState({}, '', window.location.pathname);
   }
 }
@@ -1143,32 +1473,51 @@ async function loadMe() {
 }
 
 function _applyIntegrationsUI(data) {
+  // ── Gmail ──
   const gmail = data?.integrations?.gmail;
-  if (!gmail) return;
-  const connected = gmail.connected;
-  const badge       = document.getElementById('gmail-status-badge');
-  const connInfo    = document.getElementById('gmail-connected-info');
-  const connEmail   = document.getElementById('gmail-connected-email');
-  const connectBtn  = document.getElementById('gmail-connect-btn');
-  const disconnBtn  = document.getElementById('gmail-disconnect-btn');
-  if (badge) {
-    badge.textContent   = connected ? 'CONNECTED' : 'NOT CONNECTED';
-    badge.style.color         = connected ? 'var(--green)'  : 'var(--text3)';
-    badge.style.borderColor   = connected ? 'rgba(104,211,145,0.3)' : 'var(--border)';
-    badge.style.background    = connected ? 'var(--green-dim)' : 'transparent';
+  if (gmail) {
+    const connected = gmail.connected;
+    _setIntegrationBadge('gmail-status-badge', connected, 'CONNECTED', 'NOT CONNECTED');
+    _el('gmail-connected-info', el => el.style.display = connected ? '' : 'none');
+    _el('gmail-connected-email', el => el.textContent = gmail.connected_email || '');
+    _el('gmail-connect-btn',    el => el.style.display = connected ? 'none' : '');
+    _el('gmail-disconnect-btn', el => el.style.display = connected ? '' : 'none');
   }
-  if (connInfo)   connInfo.style.display  = connected ? '' : 'none';
-  if (connEmail)  connEmail.textContent   = gmail.connected_email || '';
-  if (connectBtn) connectBtn.style.display  = connected ? 'none' : '';
-  if (disconnBtn) disconnBtn.style.display  = connected ? '' : 'none';
+
+  // ── Google Calendar ──
+  const cal = data?.integrations?.calendar;
+  if (cal !== undefined) {
+    const connected = !!cal?.connected;
+    _setIntegrationBadge('cal-status-badge', connected, 'CONNECTED', 'NOT CONNECTED');
+    _el('cal-connected-info',  el => el.style.display = connected ? '' : 'none');
+    _el('cal-connect-btn',     el => el.style.display = connected ? 'none' : '');
+    _el('cal-disconnect-btn',  el => el.style.display = connected ? '' : 'none');
+  }
+
+  // ── Telegram ──
+  const tg = data?.integrations?.telegram;
+  if (tg) {
+    const linked = tg.connected;
+    _setIntegrationBadge('tg-status-badge', linked, 'LINKED', 'NOT LINKED');
+    _el('tg-connected-info', el => el.style.display = linked ? '' : 'none');
+    _el('tg-chat-id', el => el.textContent = tg.chat_id || '');
+  }
+}
+
+function _el(id, fn) { const el = document.getElementById(id); if (el) fn(el); }
+
+function _setIntegrationBadge(id, connected, onLabel, offLabel) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent       = connected ? onLabel : offLabel;
+  el.style.color       = connected ? 'var(--green)'  : 'var(--text3)';
+  el.style.borderColor = connected ? 'rgba(104,211,145,0.3)' : 'var(--border)';
+  el.style.background  = connected ? 'var(--green-dim)' : 'transparent';
 }
 
 async function connectGmail() {
   if (!token) return showToast('Please log in first', 'error');
-  // Create a hidden form that posts to a new tab — the form includes the Bearer header via a
-  // server-side token query param (accepted by the /auth/gmail endpoint as an alternative to
-  // the Authorization header when triggered from a browser redirect context).
-  window.open(`${API}/auth/gmail?bearer=${encodeURIComponent(token)}`, '_self');
+  window.location.href = `${API}/auth/gmail?bearer=${encodeURIComponent(token)}`;
 }
 
 async function disconnectGmail() {
@@ -1183,11 +1532,27 @@ async function disconnectGmail() {
   } catch { showToast('Network error', 'error'); }
 }
 
+async function connectCalendar() {
+  if (!token) return showToast('Please log in first', 'error');
+  window.location.href = `${API}/auth/calendar?bearer=${encodeURIComponent(token)}`;
+}
+
+async function disconnectCalendar() {
+  if (!token) return;
+  try {
+    const r = await fetch(`${API}/auth/calendar`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (r.ok) { showToast('Google Calendar disconnected', 'success'); loadMe(); }
+    else showToast('Failed to disconnect Calendar', 'error');
+  } catch { showToast('Network error', 'error'); }
+}
+
 async function checkHealth() {
   try {
     const r = await fetch(`${API}/health`);
     if (r.ok) { setStatus(true); return true; }
-    }
   } catch {}
   setStatus(false);
   showToast('Cannot reach API at localhost:8000 — is the server running?', 'error');
@@ -1203,7 +1568,7 @@ function setStatus(online) {
 
 // ─── TABS ────────────────────────────────────────────────────────────
 function switchTab(name) {
-  ['chat','tasks','notes','vision','habits','forecast','briefing','settings'].forEach(t => {
+  ['chat','tasks','notes','vision','habits','forecast','briefing','settings','history'].forEach(t => {
     document.getElementById('tab-'+t).classList.remove('active');
     document.getElementById('nav-'+t).classList.remove('active');
   });
@@ -1215,6 +1580,7 @@ function switchTab(name) {
   if (name === 'briefing') loadBriefing();
   if (name === 'notes')    loadNotes();
   if (name === 'settings') loadMe();
+  if (name === 'history')  loadHistory();
 }
 
 // ─── CHAT ────────────────────────────────────────────────────────────
@@ -1232,67 +1598,330 @@ function sendQuick(msg) {
   sendMessage();
 }
 
+// ── MULTI-AGENT WORKFLOW SCENARIOS ───────────────────────────────────
+const WORKFLOWS = {
+  plan_week: `You are helping me plan my week. Please do ALL of the following steps in order:
+1. List all my open tasks, grouped by priority (P0 first).
+2. Check my calendar for any events or meetings this week.
+3. Based on the tasks and calendar, identify any scheduling conflicts or overloaded days.
+4. Create a focused daily plan: assign my top 3 tasks to specific days Mon-Fri based on priority and due dates.
+5. Save the weekly plan as a note titled "Weekly Plan – ${_thisWeek()}" with tag "planning".
+Present a clean summary at the end showing: tasks scheduled, conflicts found, and note saved.`,
+
+  prep_meeting: `You are helping me prepare for my next meeting. Please do ALL of the following:
+1. Check my calendar and find my next upcoming meeting or event.
+2. Search my notes for anything related to that meeting's topic or attendees.
+3. List any open tasks linked to that meeting's project or topic.
+4. Draft a short meeting brief (agenda, open items, relevant context) and save it as a note titled "Meeting Brief – [meeting name]" with tag "meeting-prep".
+Present a summary: meeting found, notes retrieved, tasks linked, brief saved.`,
+
+  inbox: `You are processing my inbox. Please do ALL of the following:
+1. Check my recent Gmail for unread or important emails from the last 24 hours.
+2. For each email that contains an action item or requires a response, create a task with the appropriate priority (P0 for urgent, P1 for same-day, P2 for this week).
+3. For any email with useful reference information, save a note with the key details.
+4. Summarise what you found: number of emails processed, tasks created (with titles), and notes saved.
+Be thorough — go through every email you find.`,
+};
+
+function _thisWeek() {
+  const d = new Date();
+  const start = new Date(d); start.setDate(d.getDate() - d.getDay() + 1);
+  return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function runWorkflow(name) {
+  const prompt = WORKFLOWS[name];
+  if (!prompt) return;
+  document.getElementById('chat-input').value = prompt;
+  sendMessage();
+}
+
+// ── LIVE TRACE DRAWER ────────────────────────────────────────────────────────
+let _ltdExpanded  = true;
+let _ltdStepCount = 0;
+
+function _ltdColorClass(color) {
+  const map = { cyan:'ac-cyan', amber:'ac-amber', blue:'ac-blue',
+                purple:'ac-purple', green:'ac-green', coral:'ac-coral' };
+  return map[color] || 'ac-gray';
+}
+
+function showLiveTrace() {
+  const drawer = document.getElementById('live-trace-drawer');
+  const steps  = document.getElementById('ltd-steps');
+  const spinner = document.getElementById('ltd-spinner');
+  const label   = document.getElementById('ltd-agent-label');
+
+  steps.innerHTML   = '';
+  _ltdStepCount     = 0;
+  _ltdExpanded      = true;
+
+  drawer.classList.add('visible');
+  drawer.classList.remove('collapsed');
+
+  spinner.classList.remove('done');
+  spinner.style.animation = '';
+
+  label.textContent = 'Routing…';
+  label.className   = '';
+
+  document.getElementById('ltd-step-count').textContent = '';
+  document.getElementById('ltd-chevron').textContent    = '▾';
+}
+
+function hideLiveTrace() {
+  document.getElementById('live-trace-drawer').classList.remove('visible');
+}
+
+function toggleLiveTrace() {
+  const drawer  = document.getElementById('live-trace-drawer');
+  const chevron = document.getElementById('ltd-chevron');
+  _ltdExpanded  = !_ltdExpanded;
+  drawer.classList.toggle('collapsed', !_ltdExpanded);
+  chevron.textContent = _ltdExpanded ? '▾' : '▸';
+}
+
+function setLiveTraceAgent(agent, color, icon) {
+  const label = document.getElementById('ltd-agent-label');
+  const cc    = _ltdColorClass(color);
+  label.textContent = `${icon || '○'}  ${agent}`;
+  // Map color name → CSS var
+  const colorVar = {
+    cyan: 'var(--cyan)', amber: 'var(--amber)', green: 'var(--green)',
+    purple: 'var(--purple)', coral: 'var(--red)', blue: '#90cdf4'
+  }[color] || 'var(--cyan)';
+  label.style.color = colorVar;
+}
+
+function addLiveTraceStep(step) {
+  _ltdStepCount++;
+
+  document.getElementById('ltd-step-count').textContent =
+    `${_ltdStepCount} step${_ltdStepCount !== 1 ? 's' : ''}`;
+
+  const iconMap = {
+    routing:     '→',
+    tool_call:   '⚙',
+    tool_result: '←',
+    thinking:    '·',
+    response:    '◈',
+  };
+  const icon    = iconMap[step.kind] || '·';
+  const acClass = _ltdColorClass(step.agent_color);
+  const ms      = step.duration_ms ? `${step.duration_ms}ms` : '';
+
+  const row = document.createElement('div');
+  row.className = `ltd-step kind-${step.kind}`;
+  row.innerHTML = `
+    <div class="ltd-step-icon ${acClass}">${icon}</div>
+    <div class="ltd-step-body">
+      <div class="ltd-step-agent ${acClass}">${step.agent_label || step.agent || ''}</div>
+      <div class="ltd-step-summary">${_escHtml(step.summary || '')}</div>
+    </div>
+    ${ms ? `<div class="ltd-step-ms">${ms}</div>` : ''}
+  `;
+
+  const container = document.getElementById('ltd-steps');
+  container.appendChild(row);
+  container.scrollTop = container.scrollHeight;
+}
+
+function finaliseLiveTrace(trace) {
+  const spinner = document.getElementById('ltd-spinner');
+  const label   = document.getElementById('ltd-agent-label');
+
+  spinner.classList.add('done');
+
+  const dur     = trace?.total_duration_ms || trace?.duration_ms || 0;
+  const durStr  = dur >= 1000 ? `${(dur/1000).toFixed(1)}s` : `${dur}ms`;
+  const agents  = (trace?.agents_involved || [])
+    .map(a => `<span class="ltd-agent-pill">${a.replace(/_/g,' ').toUpperCase()}</span>`)
+    .join(' ');
+
+  label.innerHTML   = `✓ Done in ${durStr} &nbsp; ${agents}`;
+  label.style.color = 'var(--green)';
+
+  // Auto-collapse the drawer after 3.5 s so it doesn't block the chat
+  setTimeout(() => {
+    if (_ltdExpanded) toggleLiveTrace();
+  }, 3500);
+}
+
 async function sendMessage() {
   const input = document.getElementById('chat-input');
   const msg = input.value.trim();
-  if (!msg) return;
+  if (!msg || !token) return;
 
   appendMsg('user', msg, []);
   input.value = '';
   input.style.height = 'auto';
   document.getElementById('send-btn').disabled = true;
 
-  const typing = appendTyping();
+  // Show the live trace drawer immediately
+  showLiveTrace();
+
+  // Typing bubble with live agent indicator
+  const typingEl = appendTyping();
+  const agentPill = typingEl.querySelector('.live-agent-pill');
+
+  const accumulatedSteps = [];
+  let finalTrace = null;
 
   try {
-    const body = { message: msg };
-    if (sessionId) body.session_id = sessionId;
+    const body = JSON.stringify({ message: msg, session_id: sessionId || undefined });
 
-    const r = await fetch(`${API}/chat`, {
-      method: 'POST',
+    const resp = await fetch(`${API}/chat`, {
+      method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify(body)
+      body,
     });
 
-    const data = await r.json();
-    typing.remove();
-
-    if (r.ok) {
-      sessionId = data.session_id;
-      appendMsg('ai', data.response, data.agents_used || []);
-      // Refresh tasks/notes in background after chat
-      loadTasks(true);
-      loadNotes(true);
-      loadHabits(true);
-    } else {
-      appendMsg('ai', `⚠️ Error: ${data.detail || 'Unknown error'}`, []);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      typingEl.remove();
+      hideLiveTrace();
+      appendMsg('ai', `⚠️ ${err.detail || 'Request failed'}`, []);
+      return;
     }
-  } catch(e) {
-    typing.remove();
+
+    // ── SSE reader ──
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop();         // keep partial last chunk
+
+      for (const chunk of lines) {
+        const line = chunk.trim();
+        if (!line.startsWith('data:')) continue;
+
+        let payload;
+        try { payload = JSON.parse(line.slice(5).trim()); }
+        catch { continue; }
+
+        if (payload.type === 'trace_step') {
+          accumulatedSteps.push(payload.step);
+          addLiveTraceStep(payload.step);   // ← live drawer
+        }
+
+        if (payload.type === 'agent_active' && agentPill) {
+          agentPill.innerHTML =
+            `<span class="live-agent-dot" style="color:var(--${payload.color === 'cyan' ? 'cyan' : payload.color === 'amber' ? 'amber' : payload.color === 'green' ? 'green' : payload.color === 'purple' ? 'purple' : 'cyan'})"></span>` +
+            payload.icon + ' ' + payload.agent;
+          setLiveTraceAgent(payload.agent, payload.color, payload.icon); // ← live drawer
+        }
+
+        if (payload.type === 'done') {
+          sessionId   = payload.session_id;
+          finalTrace  = payload.trace;
+          typingEl.remove();
+          finaliseLiveTrace(payload.trace);   // ← live drawer: stop spinner, show summary, auto-collapse
+          appendMsg('ai', payload.response, finalTrace?.agents_involved || [], finalTrace);
+          loadTasks(true); loadNotes(true); loadHabits(true);
+        }
+
+        if (payload.type === 'error') {
+          typingEl.remove();
+          hideLiveTrace();   // ← live drawer: hide on error
+          appendMsg('ai', `⚠️ ${payload.detail || 'Unknown error'}`, []);
+        }
+      }
+    }
+  } catch (e) {
+    typingEl.remove();
+    hideLiveTrace();   // ← live drawer
     appendMsg('ai', `⚠️ Network error: ${e.message}`, []);
   }
 
   document.getElementById('send-btn').disabled = false;
 }
 
-function appendMsg(role, text, agents) {
-  const wrap = document.getElementById('chat-messages');
-  const isAI = role === 'ai';
-  const agentBadges = agents.map(a => `<span class="msg-agent-badge">${a.toUpperCase()}</span>`).join(' ');
+// ── COLOUR helper for trace steps ────────────────────────────────────────────
+function _acClass(color) {
+  const map = { cyan:'ac-cyan', amber:'ac-amber', blue:'ac-blue',
+                purple:'ac-purple', green:'ac-green', coral:'ac-coral' };
+  return map[color] || 'ac-gray';
+}
 
+// ── TRACE PANEL BUILDER ───────────────────────────────────────────────────────
+function buildTracePanel(trace) {
+  if (!trace || !trace.steps || trace.steps.length === 0) return '';
+
+  const agentList  = [...new Set((trace.agents_involved || []).map(a => a.replace(/_/g,' ').toUpperCase()))].join(' · ');
+  const durationSec = ((trace.total_duration_ms || 0) / 1000).toFixed(2);
+  const stepCount  = trace.steps.length;
+
+  const stepsHtml = trace.steps.map(s => {
+    const kindClass = `kind-${s.kind}`;
+    const acClass   = _acClass(s.agent_color);
+    const ms        = s.duration_ms ? `${s.duration_ms}ms` : '';
+    const icon      = s.kind === 'routing'     ? '→'
+                    : s.kind === 'tool_call'   ? '⚙'
+                    : s.kind === 'tool_result' ? '←'
+                    : s.kind === 'response'    ? '◈'
+                    : '·';
+    return `
+      <div class="trace-step ${kindClass}">
+        <div class="trace-step-icon ${acClass}">${icon}</div>
+        <div class="trace-step-body">
+          <div class="trace-step-agent ${acClass}">${s.agent_label || s.agent}</div>
+          <div class="trace-step-summary">${_escHtml(s.summary)}</div>
+        </div>
+        <div class="trace-step-ms">${ms}</div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="trace-panel" id="tp-${trace.trace_id}">
+      <div class="trace-header" onclick="toggleTrace('tp-${trace.trace_id}')">
+        <span style="color:var(--cyan)">◈</span>
+        <span>Execution trace</span>
+        <span style="color:var(--text3);margin-left:4px">${stepCount} steps · ${agentList} · ${durationSec}s</span>
+        <span class="trace-chevron" style="font-size:9px">▼</span>
+      </div>
+      <div class="trace-body">${stepsHtml}</div>
+    </div>`;
+}
+
+function toggleTrace(panelId) {
+  const el = document.getElementById(panelId);
+  if (el) el.classList.toggle('open');
+}
+
+function _escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── APPEND MESSAGE ────────────────────────────────────────────────────────────
+function appendMsg(role, text, agents, trace) {
+  const wrap  = document.getElementById('chat-messages');
+  const isAI  = role === 'ai';
   const safeText = text
     .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
     .replace(/\n/g, '<br/>');
+
+  const agentBadges = (agents || []).map(a =>
+    `<span class="msg-agent-badge">${a.replace(/_/g,' ').toUpperCase()}</span>`
+  ).join(' ');
+
+  const traceHtml = (isAI && trace) ? buildTracePanel(trace) : '';
 
   const div = document.createElement('div');
   div.className = `msg ${isAI ? 'ai' : 'user'}`;
   div.innerHTML = isAI
     ? `<div class="msg-avatar ai">A</div>
-       <div class="msg-body">
+       <div class="msg-body" style="max-width:78%">
          <div class="msg-meta">AIDEN ${agentBadges}</div>
          <div class="msg-bubble">${safeText}</div>
+         ${traceHtml}
        </div>`
-    : `<div class="msg-avatar user-av">${(currentUser?.sub||'U')[0].toUpperCase()}</div>
+    : `<div class="msg-avatar user-av">${(currentUser?.name||currentUser?.email||'U')[0].toUpperCase()}</div>
        <div class="msg-body">
          <div class="msg-meta" style="justify-content:flex-end">${new Date().toLocaleTimeString()}</div>
          <div class="msg-bubble">${safeText}</div>
@@ -1303,15 +1932,19 @@ function appendMsg(role, text, agents) {
   return div;
 }
 
+// ── TYPING BUBBLE (with live agent pill) ─────────────────────────────────────
 function appendTyping() {
   const wrap = document.getElementById('chat-messages');
-  const div = document.createElement('div');
+  const div  = document.createElement('div');
   div.className = 'msg ai';
   div.innerHTML = `<div class="msg-avatar ai">A</div>
     <div class="msg-body">
       <div class="msg-bubble" style="padding:12px 20px">
         <div class="typing-indicator">
           <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+        </div>
+        <div class="live-agent-pill">
+          <span class="live-agent-dot"></span>Routing…
         </div>
       </div>
     </div>`;
@@ -1980,7 +2613,7 @@ function renderHabits() {
     html += '</div>';
     html += '<div class="rate-bar"><div class="rate-bar-fill" style="width:' + rateW + '%"></div></div>';
     html += '<div class="heatmap">' + buildHeatmap(h.completion_history) + '</div>';
-    html += '<button class="checkin-btn' + (alreadyDone ? ' done' : '') + '" id="btn-' + h.recurring_id + '" onclick="checkinHabit('' + h.recurring_id + '')" ' + (alreadyDone ? 'disabled' : '') + '>';
+    html += `<button class="checkin-btn${alreadyDone ? ' done' : ''}" id="btn-${h.recurring_id}" onclick="checkinHabit('${h.recurring_id}')" ${alreadyDone ? 'disabled' : ''}>`;
     html += alreadyDone ? 'Completed today' : 'Mark complete today';
     html += '</button></div>';
   }
@@ -2031,6 +2664,70 @@ setInterval(function() { if (token) checkHealth(); }, 30000);
 });
 
 // Try to restore a saved session on page load
+// ─── WORKFLOW HISTORY ────────────────────────────────────────────────
+async function loadHistory() {
+  if (!token) return;
+  const el = document.getElementById('history-list');
+  el.innerHTML = '<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3);padding:20px 0;text-align:center">Loading…</div>';
+  try {
+    const r = await fetch(`${API}/chat/history?limit=30`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!r.ok) { el.innerHTML = '<div class="empty-state"><div class="empty-title">Failed to load</div></div>'; return; }
+    const traces = await r.json();
+    renderHistory(traces, el);
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-title">Network error</div><div class="empty-sub">${e.message}</div></div>`;
+  }
+}
+
+function renderHistory(traces, container) {
+  if (!traces || traces.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon" style="font-size:32px;opacity:.3">⏱</div><div class="empty-title">No history yet</div><div class="empty-sub">Run a workflow or chat to see traces here</div></div>`;
+    return;
+  }
+
+  const colorMap = { cyan:'#63b3ed', amber:'#f6ad55', green:'#68d391', purple:'#b794f4', blue:'#90cdf4', coral:'#fc8181', gray:'#4a5568' };
+  const kindIcon = { routing:'→', tool_call:'⚙', tool_result:'←', response:'◈', thinking:'·' };
+  const kindColor = { routing:'rgba(99,179,237,.4)', tool_call:'rgba(246,173,85,.4)', tool_result:'rgba(104,211,145,.4)', response:'rgba(99,179,237,.7)', thinking:'rgba(74,85,104,.4)' };
+
+  container.innerHTML = traces.map((t, idx) => {
+    const ts = new Date(t.started_at || Date.now()).toLocaleString();
+    const dur = t.total_duration_ms ? `${(t.total_duration_ms/1000).toFixed(2)}s` : '';
+    const stepCount = (t.steps || []).length;
+    const agents = (t.agents_involved || []).map(a =>
+      `<span class="history-agent-pill">${a.replace(/_/g,' ').toUpperCase()}</span>`
+    ).join('');
+    const preview = (t.user_message || '').slice(0, 90) + ((t.user_message||'').length > 90 ? '…' : '');
+    const success = t.success !== false;
+
+    const stepsHtml = (t.steps || []).map(s => `
+      <div style="display:flex;align-items:flex-start;gap:8px;padding:4px 16px;font-family:var(--font-mono);font-size:9px;border-left:2px solid ${kindColor[s.kind]||'rgba(74,85,104,.4)'}">
+        <span style="color:${colorMap[s.agent_color]||'#4a5568'};flex-shrink:0;width:12px;text-align:center">${kindIcon[s.kind]||'·'}</span>
+        <span style="color:#4a5568;font-size:8px;min-width:70px;flex-shrink:0">${(s.agent_label||'').toUpperCase()}</span>
+        <span style="color:var(--text2);flex:1;word-break:break-all">${_escHtml(s.summary||'')}</span>
+        <span style="color:var(--text3);flex-shrink:0">${s.duration_ms ? s.duration_ms+'ms' : ''}</span>
+      </div>`).join('');
+
+    return `<div class="history-card">
+      <div class="history-card-hdr" onclick="toggleHistoryCard('hc-${idx}')">
+        <span style="font-size:10px">${success ? '✓' : '✗'}</span>
+        <div class="history-card-title">${_escHtml(preview)}</div>
+        <div class="history-card-meta">${stepCount} steps · ${dur}<br/>${ts}</div>
+      </div>
+      <div class="history-agents">${agents}</div>
+      <div class="history-steps-panel" id="hc-${idx}">
+        <div style="padding:8px 0">${stepsHtml || '<div style="padding:6px 16px;font-family:var(--font-mono);font-size:9px;color:var(--text3)">No steps recorded</div>'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleHistoryCard(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+}
+
 tryRestoreSession();
 </script>
 </body>
