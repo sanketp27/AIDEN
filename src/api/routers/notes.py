@@ -55,27 +55,79 @@ async def list_notes(
     return await notes_repo.list_notes(current_user.user_id, filters)
 
 
-@router.get("/search", response_model=list[Note])
+@router.get("/search")
 async def search_notes(
-    q: str,
+    q:     str,
     top_k: int = 5,
-    current_user: UserClaims = Depends(get_current_active_user)
-) -> list[Note]:
-    """Semantic search across notes"""
-    # Search in ChromaDB
+    current_user: UserClaims = Depends(get_current_active_user),
+):
+    """
+    Semantic search across notes using Gemini text-embedding-004 + ChromaDB.
+    Returns results ranked by cosine similarity with a score in [0, 1].
+    """
+    if not q or len(q.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Query too short (min 2 chars)")
+
     search_results = await vector_repo.semantic_search(
-        user_id=current_user.user_id,
-        query=q,
-        top_k=top_k
+        user_id = current_user.user_id,
+        query   = q.strip(),
+        top_k   = top_k,
     )
 
-    # Get full notes from MongoDB
-    note_ids = [result["document_id"] for result in search_results]
-    notes = await notes_repo.get_notes_by_ids(current_user.user_id, note_ids)
+    # Fetch full note objects from MongoDB in parallel
+    note_ids = [r["document_id"] for r in search_results]
+    notes    = await notes_repo.get_notes_by_ids(current_user.user_id, note_ids)
 
-    log.info("semantic_search", user_id=current_user.user_id, query=q, results=len(notes))
+    # Build a score lookup keyed by note_id
+    score_map = {r["document_id"]: r["score"] for r in search_results}
 
-    return notes
+    # Attach score + model to each note dict for the response
+    result_list = []
+    for note in notes:
+        note_dict = note.model_dump() if hasattr(note, "model_dump") else dict(note)
+        note_dict["_score"] = score_map.get(note_dict.get("note_id", ""), 0.0)
+        note_dict["_model"] = "text-embedding-004"
+        result_list.append(note_dict)
+
+    # Re-sort by score descending (MongoDB order may differ)
+    result_list.sort(key=lambda x: x["_score"], reverse=True)
+
+    log.info(
+        "semantic_search_response",
+        user_id = current_user.user_id,
+        query   = q,
+        results = len(result_list),
+    )
+    return {
+        "query":   q,
+        "model":   "gemini/text-embedding-004",
+        "results": result_list,
+        "count":   len(result_list),
+    }
+
+
+@router.get("/search/verify")
+async def verify_embeddings(
+    current_user: UserClaims = Depends(get_current_active_user),
+):
+    """
+    Quick smoke-test: embeds a short probe text and returns the vector dimensions.
+    Confirms Gemini text-embedding-004 is live and returning 768-dim vectors.
+    """
+    from src.repositories.vector_repo import _embed_documents, _embed_query
+    try:
+        doc_vec   = await _embed_documents(["embedding verification probe"])
+        query_vec = await _embed_query("verification query")
+        return {
+            "status":          "ok",
+            "model":           "text-embedding-004",
+            "document_dims":   len(doc_vec[0]),
+            "query_dims":      len(query_vec),
+            "expected_dims":   768,
+            "dims_match":      len(doc_vec[0]) == 768 and len(query_vec) == 768,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Embedding verification failed: {exc}")
 
 
 @router.get("/{note_id}", response_model=Note)
