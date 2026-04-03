@@ -25,6 +25,10 @@ from pydantic import BaseModel, Field
 from src.core.config import settings
 from src.models.task import Priority, Task
 from src.repositories.task_repo import TaskRepository
+from src.services.gmail_direct import (
+    GmailDirectClient, get_gmail_client_for_user, extract_email_parts
+)
+from src.repositories.prefs_repo import prefs_repo
 
 log = structlog.get_logger()
 
@@ -293,15 +297,16 @@ class ProcessedEmailRepo:
 class GmailPipelineService:
     """
     Orchestrates the full Gmail → Task pipeline for one user.
+    Credentials are loaded from MongoDB (set via GET /auth/gmail OAuth flow).
 
     Typical call:
-        service = GmailPipelineService(user_id="alice", jwt_token="...")
+        service = GmailPipelineService(user_id="alice")
         results = await service.run_once()
     """
 
-    def __init__(self, user_id: str, jwt_token: str) -> None:
+    def __init__(self, user_id: str, jwt_token: str = "") -> None:
         self.user_id   = user_id
-        self._gmail    = GmailMCPClient(settings.GMAIL_MCP_URL, jwt_token)
+        self._gmail    = None
         self._extractor = ActionExtractor()
         self._task_repo  = TaskRepository()
         self._processed  = ProcessedEmailRepo()
@@ -310,40 +315,145 @@ class GmailPipelineService:
         self,
         max_emails:   int  = 20,
         mark_as_read: bool = False,
-        query:        str  = "is:unread -from:noreply -from:no-reply",
+        query:        str  = "",
     ) -> list[EmailProcessingResult]:
         """
-        Run one pipeline cycle:
-          1. List unread emails
-          2. Skip already-processed ones
-          3. Fetch body, extract actions
+        Run one pipeline cycle using GmailDirectClient (no MCP required):
+          1. Load user credentials + preferences from MongoDB
+          2. Apply per-user filter (ignored senders, domains, keywords)
+          3. Fetch body, extract actions with Gemini
           4. Create tasks with email context
           5. Optionally mark email as read
         """
         await self._processed.ensure_index()
 
-        log.info("gmail_pipeline_start", user_id=self.user_id, max_emails=max_emails)
+        # Load Gmail client from stored OAuth credentials
+        gmail_client = await get_gmail_client_for_user(self.user_id)
+        if not gmail_client:
+            log.warning("gmail_no_credentials", user_id=self.user_id,
+                        hint="User must complete OAuth at GET /auth/gmail")
+            return []
+        self._gmail = gmail_client
+
+        # Load user preferences for filtering
+        prefs = await prefs_repo.get_or_create(self.user_id)
+        gp    = prefs.gmail
+        if not gp.enabled:
+            log.info("gmail_pipeline_disabled", user_id=self.user_id)
+            await self._gmail.close()
+            return []
+
+        # Build query string from preferences
+        effective_query = query or gp.custom_query or "is:unread -from:noreply -from:no-reply"
+
+        log.info("gmail_pipeline_start", user_id=self.user_id,
+                 max_emails=max_emails, query=effective_query)
 
         try:
-            emails = await self._gmail.list_messages(max_results=max_emails, query=query)
+            raw_msgs = await self._gmail.list_messages(
+                max_results=max_emails, query=effective_query
+            )
         except Exception as exc:
             log.error("gmail_list_failed", user_id=self.user_id, error=str(exc))
+            await self._gmail.close()
             return []
 
         results: list[EmailProcessingResult] = []
+        ignored_senders  = {s.lower() for s in gp.ignored_senders}
+        ignored_domains  = {d.lower() for d in gp.ignored_domains}
+        ignored_keywords = [k.lower() for k in gp.ignored_subject_keywords]
 
-        for email in emails:
-            result = await self._process_email(email, mark_as_read=mark_as_read)
+        for msg_stub in raw_msgs:
+            try:
+                msg = await self._gmail.get_message(msg_stub["id"])
+                subject, sender, date, body, snippet = extract_email_parts(msg)
+            except Exception as exc:
+                log.warning("gmail_fetch_failed", msg_id=msg_stub["id"], error=str(exc))
+                continue
+
+            email = EmailSummary(
+                email_id=msg_stub["id"],
+                thread_id=msg_stub.get("threadId", ""),
+                subject=subject, sender=sender, snippet=snippet, date=date,
+            )
+
+            # Per-user ignore rules (no LLM — pure string matching)
+            sender_lower  = sender.lower()
+            subject_lower = subject.lower()
+            sender_domain = sender_lower.split("@")[-1].rstrip(">")
+
+            if any(s in sender_lower for s in ignored_senders):
+                results.append(EmailProcessingResult(
+                    email_id=email.email_id, subject=subject, sender=sender,
+                    actions=[], skipped=True, reason=f"sender in ignore list"
+                ))
+                continue
+
+            if any(d in sender_domain for d in ignored_domains):
+                results.append(EmailProcessingResult(
+                    email_id=email.email_id, subject=subject, sender=sender,
+                    actions=[], skipped=True, reason=f"domain in ignore list"
+                ))
+                continue
+
+            if any(k in subject_lower for k in ignored_keywords):
+                results.append(EmailProcessingResult(
+                    email_id=email.email_id, subject=subject, sender=sender,
+                    actions=[], skipped=True, reason="subject keyword filtered"
+                ))
+                continue
+
+            result = await self._process_email_direct(
+                email, body, mark_as_read=mark_as_read or gp.mark_read_after_task
+            )
             results.append(result)
 
+        await self._gmail.close()
+
         total_tasks = sum(r.tasks_created for r in results)
-        log.info(
-            "gmail_pipeline_complete",
-            user_id=self.user_id,
-            emails_processed=len(results),
-            tasks_created=total_tasks,
-        )
+        log.info("gmail_pipeline_complete", user_id=self.user_id,
+                 emails_processed=len(results), tasks_created=total_tasks)
         return results
+
+    async def _process_email_direct(
+        self,
+        email: EmailSummary,
+        body: str,
+        mark_as_read: bool,
+    ) -> EmailProcessingResult:
+        """Process a single email using pre-fetched body."""
+        if await self._processed.is_processed(self.user_id, email.email_id):
+            return EmailProcessingResult(
+                email_id=email.email_id, subject=email.subject, sender=email.sender,
+                actions=[], skipped=True, reason="already processed",
+            )
+
+        try:
+            actions = await self._extractor.extract(
+                subject=email.subject, sender=email.sender,
+                body=body, date=email.date,
+            )
+        except Exception as exc:
+            log.error("action_extraction_failed", email_id=email.email_id, error=str(exc))
+            actions = []
+
+        tasks_created = 0
+        for action in actions:
+            await self._create_task_from_action(action, email)
+            tasks_created += 1
+
+        await self._processed.mark_processed(self.user_id, email.email_id, email.subject)
+
+        if mark_as_read and self._gmail and tasks_created > 0:
+            try:
+                await self._gmail.mark_as_read(email.email_id)
+            except Exception as exc:
+                log.warning("gmail_mark_read_failed", email_id=email.email_id, error=str(exc))
+
+        return EmailProcessingResult(
+            email_id=email.email_id, subject=email.subject, sender=email.sender,
+            actions=actions, tasks_created=tasks_created,
+        )
 
     async def _process_email(
         self,
@@ -456,6 +566,9 @@ class GmailPipelineService:
         await self._gmail.close()
 
 
+# ── Multi-user scheduler job ─────────────────────────────────────────────────
+
+# Registry: user_id → JWT token (populated at runtime via POST /gmail/connect)
 _pipeline_registry: dict[str, str] = {}
 
 
@@ -473,22 +586,27 @@ def unregister_gmail_user(user_id: str) -> None:
 async def run_gmail_pipeline_for_all_users() -> None:
     """
     Called by APScheduler every N minutes.
-    Runs the pipeline concurrently for all registered users.
+    Loads all users with stored Gmail credentials from MongoDB.
+    Credentials are set via GET /auth/gmail OAuth flow — no in-memory registry needed.
+    _pipeline_registry still works as an opt-in override (legacy POST /gmail/connect).
     """
-    if not _pipeline_registry:
+    from src.services.gmail_direct import cred_store
+
+    # Get users from credential store (persistent across restarts)
+    db_users = await cred_store.list_connected_users("gmail")
+    # Merge with in-memory registry (legacy connect flow)
+    all_users = set(db_users) | set(_pipeline_registry.keys())
+
+    if not all_users:
         return
 
-    log.info("gmail_pipeline_scheduler_run", users=len(_pipeline_registry))
-
-    tasks = [
-        _run_for_user(uid, tok)
-        for uid, tok in list(_pipeline_registry.items())
-    ]
+    log.info("gmail_pipeline_scheduler_run", users=len(all_users))
+    tasks = [_run_for_user(uid) for uid in all_users]
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def _run_for_user(user_id: str, jwt_token: str) -> None:
-    service = GmailPipelineService(user_id=user_id, jwt_token=jwt_token)
+async def _run_for_user(user_id: str, jwt_token: str = "") -> None:
+    service = GmailPipelineService(user_id=user_id)
     try:
         await service.run_once(max_emails=30, mark_as_read=True)
     except Exception as exc:

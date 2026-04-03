@@ -120,6 +120,24 @@
   .btn-primary:active { transform: scale(0.99); }
   .auth-hint { font-family: var(--font-mono); font-size: 10px; color: var(--text3); margin-top: 16px; text-align: center; line-height: 1.6; }
   .auth-hint a { color: var(--cyan); cursor: pointer; text-decoration: none; }
+  .auth-tabs {
+    display: flex; gap: 4px; margin-bottom: 28px;
+    background: var(--bg3); border-radius: var(--r); padding: 4px;
+  }
+  .auth-tab {
+    flex: 1; padding: 8px; border: none; border-radius: 6px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+    cursor: pointer; background: transparent; color: var(--text2);
+    transition: all 0.2s;
+  }
+  .auth-tab.active { background: var(--bg4); color: var(--cyan); }
+  .field-group { margin-bottom: 16px; }
+  .auth-error {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--red); background: var(--red-dim);
+    border: 1px solid rgba(252,129,129,0.25); border-radius: 6px;
+    padding: 8px 12px; margin-bottom: 4px;
+  }
 
   /* ── MAIN LAYOUT ── */
   #app { flex: 1; display: flex; overflow: hidden; }
@@ -534,15 +552,50 @@
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-card">
-    <div class="auth-title">Welcome back.</div>
-    <div class="auth-sub">// ENTER YOUR JWT ACCESS TOKEN TO CONTINUE</div>
-    <label class="field-label">ACCESS TOKEN</label>
-    <input class="field-input" id="token-input" type="password" placeholder="eyJhbGciOiJIUzI1NiIs..."/>
-    <button class="btn-primary" onclick="doLogin()">INITIALIZE SESSION</button>
-    <div class="auth-hint">
-      Generate a token: <code style="color:var(--cyan)">python generate_token.py --user-id john --role user</code><br/>
-      API must be running at <a onclick="void(0)">localhost:8000</a>
+
+    <!-- Tab switcher -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-btn-login" onclick="showAuthTab('login')">SIGN IN</button>
+      <button class="auth-tab" id="tab-btn-register" onclick="showAuthTab('register')">REGISTER</button>
     </div>
+
+    <!-- LOGIN FORM -->
+    <div id="auth-login">
+      <div class="auth-title">Welcome back.</div>
+      <div class="auth-sub">// SIGN IN TO CONTINUE</div>
+      <div class="field-group">
+        <label class="field-label">EMAIL</label>
+        <input class="field-input" id="login-email" type="email" placeholder="you@company.com" autocomplete="email"/>
+      </div>
+      <div class="field-group">
+        <label class="field-label">PASSWORD</label>
+        <input class="field-input" id="login-password" type="password" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <div id="login-error" class="auth-error" style="display:none"></div>
+      <button class="btn-primary" id="login-btn" onclick="doLogin()">INITIALIZE SESSION</button>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="auth-register" style="display:none">
+      <div class="auth-title">Create account.</div>
+      <div class="auth-sub">// REGISTER TO GET STARTED</div>
+      <div class="field-group">
+        <label class="field-label">FULL NAME</label>
+        <input class="field-input" id="reg-name" type="text" placeholder="Jane Smith" autocomplete="name"/>
+      </div>
+      <div class="field-group">
+        <label class="field-label">EMAIL</label>
+        <input class="field-input" id="reg-email" type="email" placeholder="you@company.com" autocomplete="email"/>
+      </div>
+      <div class="field-group">
+        <label class="field-label">PASSWORD</label>
+        <input class="field-input" id="reg-password" type="password" placeholder="Min. 8 characters" autocomplete="new-password"/>
+      </div>
+      <div id="reg-error" class="auth-error" style="display:none"></div>
+      <button class="btn-primary" id="reg-btn" onclick="doRegister()">CREATE ACCOUNT</button>
+    </div>
+
+    <div class="auth-hint">API must be running at <span style="color:var(--cyan)">localhost:8000</span></div>
   </div>
 </div>
 
@@ -577,6 +630,9 @@
       <div class="nav-item" onclick="switchTab('briefing')" id="nav-briefing">
         <span class="nav-icon">&#9788;</span> Briefing
         <span class="nav-badge" id="briefing-unread-badge" style="display:none;background:var(--cyan-dim);color:var(--cyan)">NEW</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('settings')" id="nav-settings">
+        <span class="nav-icon">⚙</span> Settings
       </div>
     </div>
     <div class="sidebar-footer">
@@ -791,6 +847,68 @@
       </div>
     </div>
 
+    <!-- SETTINGS TAB -->
+    <div class="tab-content" id="tab-settings">
+      <div style="flex:1;overflow-y:auto;padding:24px;max-width:680px;margin:0 auto;width:100%">
+        <div style="font-family:var(--font-head);font-size:20px;font-weight:700;margin-bottom:4px;">Settings</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:28px;letter-spacing:.1em">// INTEGRATIONS & PREFERENCES</div>
+
+        <!-- Gmail Card -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+            <div style="font-size:22px;">📧</div>
+            <div>
+              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Gmail</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Inbox monitoring &amp; task extraction</div>
+            </div>
+            <div id="gmail-status-badge" style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">NOT CONNECTED</div>
+          </div>
+          <div id="gmail-connected-info" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+            Connected as: <span id="gmail-connected-email" style="color:var(--cyan)"></span>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button id="gmail-connect-btn" class="btn-primary" style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;" onclick="connectGmail()">
+              Connect Gmail
+            </button>
+            <button id="gmail-disconnect-btn" class="btn-primary" style="margin-top:0;display:none;width:auto;padding:10px 20px;font-size:12px;background:var(--red);color:#fff;" onclick="disconnectGmail()">
+              Disconnect
+            </button>
+          </div>
+        </div>
+
+        <!-- Account Info Card -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <div style="font-family:var(--font-head);font-size:14px;font-weight:600;margin-bottom:12px;">Account</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">NAME</div>
+              <div id="settings-name" style="font-size:13px;">—</div>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">EMAIL</div>
+              <div id="settings-email" style="font-size:13px;">—</div>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">ROLE</div>
+              <div id="settings-role" style="font-size:13px;">—</div>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">USER ID</div>
+              <div id="settings-uid" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div style="background:var(--bg2);border:1px solid rgba(252,129,129,0.2);border-radius:12px;padding:20px;">
+          <div style="font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--red);margin-bottom:12px;">Session</div>
+          <button class="btn-primary" style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;background:transparent;border:1px solid var(--red);color:var(--red);" onclick="doLogout()">
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -807,41 +925,202 @@ let allNotes = [];
 let visionExtractedTasks = [];
 let currentImageB64 = null;
 
-// ─── AUTH ───────────────────────────────────────────────────────────
-function parseJwt(t) {
-  try { return JSON.parse(atob(t.split('.')[1])); } catch { return null; }
+// ─── AUTH TABS ───────────────────────────────────────────────────────
+function showAuthTab(tab) {
+  document.getElementById('auth-login').style.display    = tab === 'login'    ? '' : 'none';
+  document.getElementById('auth-register').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tab-btn-login').classList.toggle('active',    tab === 'login');
+  document.getElementById('tab-btn-register').classList.toggle('active', tab === 'register');
+  clearAuthErrors();
 }
 
+function clearAuthErrors() {
+  ['login-error','reg-error'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.display = 'none';
+    el.textContent = '';
+  });
+}
+
+function setAuthError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+function setAuthLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  btn.disabled = loading;
+  btn.style.opacity = loading ? '0.6' : '1';
+}
+
+// ─── LOGIN ───────────────────────────────────────────────────────────
 async function doLogin() {
-  const val = document.getElementById('token-input').value.trim();
-  if (!val) return showToast('Please enter your JWT token', 'error');
-  token = val;
-  const payload = parseJwt(token);
-  if (!payload) return showToast('Invalid token format', 'error');
+  clearAuthErrors();
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!email || !password) return setAuthError('login-error', 'Email and password are required.');
 
-  const ok = await checkHealth();
-  if (!ok) { token = ''; return; }
+  setAuthLoading('login-btn', true);
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      setAuthError('login-error', data.detail || 'Login failed.');
+      return;
+    }
+    await _onAuthSuccess(data);
+  } catch (e) {
+    setAuthError('login-error', 'Cannot reach API at localhost:8000 — is the server running?');
+  } finally {
+    setAuthLoading('login-btn', false);
+  }
+}
 
-  currentUser = payload;
-  document.getElementById('user-name').textContent = payload.sub || 'User';
-  document.getElementById('user-role').textContent = payload.role || 'user';
-  document.getElementById('user-avatar').textContent = (payload.sub || 'U')[0].toUpperCase();
+// ─── REGISTER ────────────────────────────────────────────────────────
+async function doRegister() {
+  clearAuthErrors();
+  const name     = document.getElementById('reg-name').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  if (!name)     return setAuthError('reg-error', 'Full name is required.');
+  if (!email)    return setAuthError('reg-error', 'Email is required.');
+  if (password.length < 8) return setAuthError('reg-error', 'Password must be at least 8 characters.');
+
+  setAuthLoading('reg-btn', true);
+  try {
+    const r = await fetch(`${API}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      setAuthError('reg-error', data.detail || 'Registration failed.');
+      return;
+    }
+    await _onAuthSuccess(data);
+  } catch (e) {
+    setAuthError('reg-error', 'Cannot reach API at localhost:8000 — is the server running?');
+  } finally {
+    setAuthLoading('reg-btn', false);
+  }
+}
+
+// ─── SHARED POST-AUTH ─────────────────────────────────────────────────
+async function _onAuthSuccess(data) {
+  token = data.access_token;
+  currentUser = data;
+
+  // Persist to localStorage so page-refresh keeps the session
+  localStorage.setItem('aiden_token', token);
+  localStorage.setItem('aiden_user',  JSON.stringify(data));
+
+  _applyUserToUI(data);
 
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
 
+  setStatus(true);
   loadTasks();
   loadNotes();
   loadHabits(true);
   checkBriefingUnread();
-  showToast('Session initialized ✓', 'success');
+  loadMe();     // pull integrations state
+  showToast(`Welcome, ${data.name || data.email} ✓`, 'success');
+
+  // Handle ?gmail=connected redirect from OAuth callback
+  _checkGmailCallbackParam();
 }
 
-function doLogout() {
+function _applyUserToUI(data) {
+  const displayName = data.name || data.email || 'User';
+  document.getElementById('user-name').textContent   = displayName;
+  document.getElementById('user-role').textContent   = data.role || 'user';
+  document.getElementById('user-avatar').textContent = displayName[0].toUpperCase();
+  // Settings panel
+  const sName  = document.getElementById('settings-name');
+  const sEmail = document.getElementById('settings-email');
+  const sRole  = document.getElementById('settings-role');
+  const sUid   = document.getElementById('settings-uid');
+  if (sName)  sName.textContent  = data.name  || '—';
+  if (sEmail) sEmail.textContent = data.email || '—';
+  if (sRole)  sRole.textContent  = data.role  || '—';
+  if (sUid)   sUid.textContent   = data.user_id || '—';
+}
+
+// ─── AUTO-RESTORE SESSION ─────────────────────────────────────────────
+async function tryRestoreSession() {
+  const savedToken = localStorage.getItem('aiden_token');
+  const savedUser  = localStorage.getItem('aiden_user');
+  if (!savedToken || !savedUser) return;
+
+  // Check token is not expired
+  function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch { return null; } }
+  const payload = parseJwt(savedToken);
+  if (!payload) { localStorage.clear(); return; }
+  if (payload.exp && Date.now() / 1000 > payload.exp) {
+    localStorage.removeItem('aiden_token');
+    localStorage.removeItem('aiden_user');
+    return;
+  }
+
+  // Verify server is reachable
+  try {
+    const r = await fetch(`${API}/health`);
+    if (!r.ok) return;
+  } catch { return; }
+
+  token = savedToken;
+  currentUser = JSON.parse(savedUser);
+  _applyUserToUI(currentUser);
+
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+
+  setStatus(true);
+  loadTasks();
+  loadNotes();
+  loadHabits(true);
+  checkBriefingUnread();
+  loadMe();
+  _checkGmailCallbackParam();
+}
+
+function _checkGmailCallbackParam() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('gmail') === 'connected') {
+    const email = params.get('email') || '';
+    showToast(`Gmail connected${email ? ': ' + email : ''} ✓`, 'success');
+    // Clean URL without reload
+    window.history.replaceState({}, '', window.location.pathname);
+    loadMe();   // refresh integration status
+  } else if (params.get('gmail') === 'error') {
+    showToast('Gmail connection failed. Please try again.', 'error');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
+
+// ─── LOGOUT ──────────────────────────────────────────────────────────
+async function doLogout() {
+  if (token) {
+    try {
+      await fetch(`${API}/auth/logout`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+    } catch {}
+  }
   token = ''; sessionId = null; currentUser = null;
+  localStorage.removeItem('aiden_token');
+  localStorage.removeItem('aiden_user');
   document.getElementById('auth-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
-  document.getElementById('token-input').value = '';
+  showAuthTab('login');
   document.getElementById('chat-messages').innerHTML = `
     <div class="msg ai">
       <div class="msg-avatar ai">A</div>
@@ -852,12 +1131,62 @@ function doLogout() {
     </div>`;
 }
 
+// ─── INTEGRATIONS ─────────────────────────────────────────────────────
+async function loadMe() {
+  if (!token) return;
+  try {
+    const r = await fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!r.ok) return;
+    const data = await r.json();
+    _applyIntegrationsUI(data);
+  } catch {}
+}
+
+function _applyIntegrationsUI(data) {
+  const gmail = data?.integrations?.gmail;
+  if (!gmail) return;
+  const connected = gmail.connected;
+  const badge       = document.getElementById('gmail-status-badge');
+  const connInfo    = document.getElementById('gmail-connected-info');
+  const connEmail   = document.getElementById('gmail-connected-email');
+  const connectBtn  = document.getElementById('gmail-connect-btn');
+  const disconnBtn  = document.getElementById('gmail-disconnect-btn');
+  if (badge) {
+    badge.textContent   = connected ? 'CONNECTED' : 'NOT CONNECTED';
+    badge.style.color         = connected ? 'var(--green)'  : 'var(--text3)';
+    badge.style.borderColor   = connected ? 'rgba(104,211,145,0.3)' : 'var(--border)';
+    badge.style.background    = connected ? 'var(--green-dim)' : 'transparent';
+  }
+  if (connInfo)   connInfo.style.display  = connected ? '' : 'none';
+  if (connEmail)  connEmail.textContent   = gmail.connected_email || '';
+  if (connectBtn) connectBtn.style.display  = connected ? 'none' : '';
+  if (disconnBtn) disconnBtn.style.display  = connected ? '' : 'none';
+}
+
+async function connectGmail() {
+  if (!token) return showToast('Please log in first', 'error');
+  // Create a hidden form that posts to a new tab — the form includes the Bearer header via a
+  // server-side token query param (accepted by the /auth/gmail endpoint as an alternative to
+  // the Authorization header when triggered from a browser redirect context).
+  window.open(`${API}/auth/gmail?bearer=${encodeURIComponent(token)}`, '_self');
+}
+
+async function disconnectGmail() {
+  if (!token) return;
+  try {
+    const r = await fetch(`${API}/auth/gmail`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (r.ok) { showToast('Gmail disconnected', 'success'); loadMe(); }
+    else showToast('Failed to disconnect Gmail', 'error');
+  } catch { showToast('Network error', 'error'); }
+}
+
 async function checkHealth() {
   try {
     const r = await fetch(`${API}/health`);
-    if (r.ok) {
-      setStatus(true);
-      return true;
+    if (r.ok) { setStatus(true); return true; }
     }
   } catch {}
   setStatus(false);
@@ -874,17 +1203,18 @@ function setStatus(online) {
 
 // ─── TABS ────────────────────────────────────────────────────────────
 function switchTab(name) {
-  ['chat','tasks','notes','vision','habits','forecast','briefing'].forEach(t => {
+  ['chat','tasks','notes','vision','habits','forecast','briefing','settings'].forEach(t => {
     document.getElementById('tab-'+t).classList.remove('active');
     document.getElementById('nav-'+t).classList.remove('active');
   });
   document.getElementById('tab-'+name).classList.add('active');
   document.getElementById('nav-'+name).classList.add('active');
-  if (name === 'tasks') { loadTasks(); loadRecurring(); }
-  if (name === 'habits') loadHabits();
+  if (name === 'tasks')    { loadTasks(); loadRecurring(); }
+  if (name === 'habits')   loadHabits();
   if (name === 'forecast') loadForecast();
   if (name === 'briefing') loadBriefing();
-  if (name === 'notes') loadNotes();
+  if (name === 'notes')    loadNotes();
+  if (name === 'settings') loadMe();
 }
 
 // ─── CHAT ────────────────────────────────────────────────────────────
@@ -1692,8 +2022,16 @@ async function checkinHabit(rid) {
 // Poll API health every 30s
 setInterval(function() { if (token) checkHealth(); }, 30000);
 
-// Enter key on auth
-document.getElementById('token-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+// Enter key on login / register fields
+['login-email','login-password'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+});
+['reg-name','reg-email','reg-password'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', function(e) { if (e.key === 'Enter') doRegister(); });
+});
+
+// Try to restore a saved session on page load
+tryRestoreSession();
 </script>
 </body>
 </html>
