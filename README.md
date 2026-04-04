@@ -9,20 +9,22 @@
 ```
 
 ### **AI Daily Executive Navigator**
-*A production-grade, multi-agent productivity system powered by Google Gemini*
+*A production-grade, multi-agent productivity system — fully on the Google AI stack*
 
 <br/>
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Google Gemini](https://img.shields.io/badge/Gemini-2.5_Flash_+_Pro-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
+[![Google Gemini](https://img.shields.io/badge/Gemini-2.0_Flash_+_Pro-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
+[![Vertex AI](https://img.shields.io/badge/Vertex_AI-Enabled-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://cloud.google.com/vertex-ai)
+[![Cloud Run](https://img.shields.io/badge/Cloud_Run-Deployed-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
 [![MongoDB](https://img.shields.io/badge/MongoDB-7.0-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://mongodb.com)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![Tests](https://img.shields.io/badge/Tests-44_passing-22C55E?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-F59E0B?style=for-the-badge)](LICENSE)
 
 <br/>
 
-> **AIDEN** is your always-on AI chief of staff. It routes your voice, text, and images to a squad of specialized AI agents, manages your tasks with ML-powered scheduling intelligence, monitors your inbox, tracks your habits, and delivers a structured daily briefing — all from a single, elegant interface.
+> **AIDEN** is not a single chatbot. It is an **orchestrated squad of specialised AI agents** that collaborate in real time to understand your intent, route it to the right specialist, and act — while you watch every routing decision, tool call, and result stream live in the UI.
 
 <br/>
 
@@ -32,7 +34,7 @@
 
 ## ✦ &nbsp;What AIDEN Does
 
-AIDEN is not a single chatbot. It is an **orchestrated squad of specialized AI agents** that collaborate behind the scenes to understand your intent, route it to the right specialist, and act — all in one conversation.
+AIDEN coordinates multiple specialised agents through a primary orchestrator. Each message you send triggers a routing decision, one or more sub-agents, real tool calls against live APIs, and a structured result — all visible in the live trace panel.
 
 <br/>
 
@@ -40,21 +42,28 @@ AIDEN is not a single chatbot. It is an **orchestrated squad of specialized AI a
   Your Input  (text / voice / image)
           │
           ▼
-  ┌─────────────────────────┐
-  │   AIDEN  ORCHESTRATOR   │  ← Gemini 2.5 Pro — routes every request
-  └──────────┬──────────────┘
-             │
-     ┌───────┼──────────────────────────────────┐
-     ▼       ▼            ▼          ▼          ▼
+  ┌─────────────────────────────┐
+  │   AIDEN  ORCHESTRATOR       │  ← Gemini 2.0 Pro via Vertex AI
+  │   (primary coordination)    │
+  └──────────┬──────────────────┘
+             │  routes to specialist agents
+     ┌────────┼──────────────────────────────────┐
+     ▼        ▼            ▼          ▼          ▼
   ┌──────┐ ┌──────────┐ ┌────────┐ ┌───────┐ ┌────────┐
   │ Task │ │ Calendar │ │  Note  │ │ Voice │ │ Vision │
   │Master│ │   Bot    │ │Keeper  │ │ Agent │ │ Agent  │
-  └──────┘ └──────────┘ └────────┘ └───────┘ └────────┘
-     │            │           │
-     ▼            ▼           ▼
-  MongoDB     MCP Server   ChromaDB
-  (tasks)    (calendar)  (vector search)
+  └──┬───┘ └────┬─────┘ └───┬────┘ └───────┘ └────────┘
+     │          │            │
+     ▼          ▼            ▼
+  MongoDB   Google       ChromaDB
+  (tasks)   Calendar    (Gemini text-
+            API v3       embedding-004
+                         vectors)
 ```
+
+<br/>
+
+Every step of this coordination **streams live to the UI** as it happens — routing decisions, tool calls with arguments, results with timing — so the multi-agent execution is fully transparent.
 
 <br/>
 
@@ -64,104 +73,122 @@ AIDEN is not a single chatbot. It is an **orchestrated squad of specialized AI a
 
 <br/>
 
+### 🔀 &nbsp;Live Agent Trace Panel
+
+Every chat message opens a real-time drawer above the response that shows each step as it happens:
+
+```
+● Orchestrator  → Routed to TaskMaster
+⚙ TaskMaster   → list_tasks({status: "todo"})        [running]
+← TaskMaster   ← list_tasks  (94ms)
+⚙ CalendarBot  → get_weeks_calendar({})              [running]
+← CalendarBot  ← get_weeks_calendar  (210ms)
+◈ Done in 1.8s   [ORCHESTRATOR]  [TASKMASTER]  [CALENDARBOT]
+```
+
+The panel auto-collapses after completion. A full collapsed trace (with all steps) is also embedded in the assistant message for reference.
+
+<br/>
+
 ### 🤖 &nbsp;Multi-Agent Intelligence
 
-| Agent | Responsibility | Example Triggers |
+| Agent | Responsibility | Trigger keywords |
 |-------|---------------|-----------------|
 | **Orchestrator** | Intent routing, multi-step coordination | Every message |
-| **TaskMaster** | Create, update, complete, prioritize tasks | *"remind me to"*, *"todo"*, *"P1"* |
-| **CalendarBot** | Schedule meetings, check free slots | *"calendar"*, *"schedule"*, *"meeting"* |
-| **NoteKeeper** | Semantic note creation, vector search | *"note"*, *"write down"*, *"remember"* |
-| **VoiceAgent** | Audio transcription → intent → action | Mic button, Telegram voice notes |
+| **TaskMaster** | Create, update, complete, prioritise tasks | *"todo"*, *"remind me"*, *"P1"* |
+| **CalendarBot** | Google Calendar v3 — list, create, find free slots | *"calendar"*, *"meeting"*, *"schedule"* |
+| **NoteKeeper** | Semantic note creation + Gemini vector search | *"note"*, *"write down"*, *"search"* |
+| **VoiceAgent** | Audio → intent → action (Gemini Live) | Mic button |
 | **VisionAgent** | Image classification + data extraction | Image upload |
+
+<br/>
+
+### ⚡ &nbsp;One-Click Multi-Step Workflow Demos
+
+Three pre-built scenarios chain 3+ agents in sequence:
+
+| Button | Agents chained | What it does |
+|--------|---------------|--------------|
+| **Plan my week** | Orchestrator → TaskMaster → CalendarBot → NoteKeeper | Lists open tasks, reads calendar, spots conflicts, assigns tasks to days, saves summary note |
+| **Prepare for my next meeting** | CalendarBot → NoteKeeper → TaskMaster | Finds next event, searches related notes, links open tasks, saves meeting brief |
+| **Process my inbox** | Gmail → Orchestrator → TaskMaster × N | Scans Gmail, creates tasks from action items, saves reference notes, delivers summary |
+
+<br/>
+
+### 📅 &nbsp;Real Google Calendar Integration
+
+Five live tools backed by Google Calendar REST API v3 (OAuth2):
+
+| Tool | What it does |
+|------|-------------|
+| `get_todays_calendar` | All events for today |
+| `get_weeks_calendar` | 7-day event view |
+| `create_calendar_event` | Create with auto conflict-check |
+| `find_free_slots` | Find available gaps on any date |
+| `delete_calendar_event` | Remove event by ID |
+
+<br/>
+
+### 🔍 &nbsp;Semantic Search — Gemini text-embedding-004
+
+Notes are indexed using Google's **text-embedding-004** model (768-dimensional vectors) stored in ChromaDB. Two separate task types are used for maximum retrieval quality:
+
+- `RETRIEVAL_DOCUMENT` — when indexing notes
+- `RETRIEVAL_QUERY` — when searching (query-optimised)
+
+Results include a cosine similarity score (`_score`) and the model name (`_model: "gemini/text-embedding-004"`). Verify embeddings are live before demo:
+
+```bash
+python scripts/verify_embeddings.py
+```
 
 <br/>
 
 ### 📋 &nbsp;Task Management
 
-- **Priority tiers**: P0 (critical) → P1 → P2 → P3 with weighted scoring
-- **Recurring tasks**: daily, weekly, monthly, weekdays, weekends with configurable intervals
-- **Habit tracking**: current streak, longest streak, 30-day completion rate, full history
-- **Per-user isolation**: every user's tasks live in their own namespaced MongoDB collection
-- **Status lifecycle**: `todo` → `in_progress` → `completed` / `cancelled`
+- Priority system: P0 Critical → P3 Low
+- Status workflow: todo → in_progress → completed → cancelled
+- Due dates, tags, recurring tasks
+- ML workload forecasting (7-day prediction)
 
 <br/>
 
-### 📊 &nbsp;ML Workload Forecaster
+### 📊 &nbsp;Workflow History & Audit Trail
 
-> Zero LLM calls. Pure math and algorithms.
-
-```
-1. Feature Extraction   ── task vectors: priority × urgency decay × due-date proximity
-2. EWMA Completion Rate ── personalised daily capacity, adapts to user's actual pace
-3. Daily Load Scoring   ── weighted sum of all open tasks per day
-4. Overload Detection   ── flags days where load > personal capacity threshold
-5. DP Rescheduling      ── 0/1 Knapsack assigns overloaded tasks to nearest free slot
-```
-
-Delivers a 14-day workload heatmap, overloaded-day warnings, and a plain-English reschedule plan.
+Every agent execution is permanently stored in MongoDB (`agent_traces` collection) and surfaced in the **History** tab — with step-by-step trace, agents involved as colour pills, duration, and full expandable detail. Proof that multi-agent coordination happens, always on record.
 
 <br/>
 
 ### 📧 &nbsp;Gmail Integration
 
-- **OAuth2 flow**: click *Connect Gmail* in Settings — browser redirect, no console commands
-- **Background polling**: APScheduler checks inbox every 15 min (configurable)
-- **Automatic task extraction**: action-items from emails become tasks with priority + due date
-- **Idempotency**: processed email IDs logged in MongoDB to prevent duplicates
-- **Scopes**: `gmail.readonly` + `gmail.modify`
+- OAuth2 connection via Google Cloud Console
+- Background inbox polling every 15 min
+- Action-item extraction → task creation
+- "Process my inbox" workflow chains Gmail → TaskMaster → NoteKeeper
 
 <br/>
 
-### 📸 &nbsp;Vision Analysis — 8 Image Types
+### 📸 &nbsp;Vision Analysis
 
-| Image Type | Extracts |
-|-----------|---------|
-| 📋 **Whiteboard** | Action items, diagrams, meeting notes |
-| ✍️ **Handwritten** | Transcribed tasks with inferred priorities |
-| 📄 **Document** | Title, content, tables, deadlines |
-| 🖥️ **Screenshot** | UI elements, error messages, text blocks |
-| 💼 **Business Card** | Name, email, phone, company, title |
-| 📊 **Slide** | Bullet points, headlines, data |
-| 🧾 **Receipt** | Vendor, amount, line items, date |
-| 📷 **Photo** | General description, visible text, context |
+Eight image types: receipts, business cards, whiteboards, screenshots, charts, food, documents, general. Gemini Vision extracts structured data and optionally creates tasks from action items found in images.
 
 <br/>
 
 ### 🎤 &nbsp;Voice Input
 
-- **Browser recording**: click mic, speak, release — transcribed by Gemini 2.5 Flash TTS
-- **Intent detection**: voice parsed into structured commands and routed to the correct agent
-- **Telegram voice notes**: send a voice message to your AIDEN bot — it transcribes and acts
-- No Google Cloud credentials required — uses Gemini API only
+Gemini Live real-time audio — speak your request, get a multi-agent response. Also supported via Telegram voice notes.
 
 <br/>
 
 ### 🌅 &nbsp;Daily Briefing
 
-Generated fresh each morning — no LLM calls, pure DB queries:
-
-```
-1. Today's tasks     — due today or overdue, sorted P0 → P3
-2. High-priority     — P0/P1 tasks due within 7 days
-3. Workload risk     — ML forecaster warning if today is overloaded
-4. Habit streaks     — active habits with current streak + last completed
-5. Suggested focus   — top 3 tasks ranked by urgency score
-```
+Structured morning brief: open tasks by priority, today's calendar, overdue items, habit streaks. Delivered at a configurable time via APScheduler.
 
 <br/>
 
-### 🤖 &nbsp;Telegram Bot
+### 🎬 &nbsp;Demo Mode
 
-Link your AIDEN account and interact from anywhere:
-
-```
-/start <jwt>    — Link Telegram to your AIDEN account
-/tasks          — List open tasks
-/note <text>    — Quick note creation
-🎤 Voice note   — Transcribed and routed to orchestrator
-💬 Any text     — Full AIDEN orchestrator response
-```
+One click seeds the account with 6 realistic tasks + 3 rich notes (all indexed in ChromaDB) and launches a 5-step guided tour highlighting every key feature. No manual setup needed for evaluation.
 
 <br/>
 
@@ -169,26 +196,28 @@ Link your AIDEN account and interact from anywhere:
 
 ## 🛠️ &nbsp;Tech Stack
 
-<br/>
-
 <div align="center">
 
-### Intelligence Layer
+### Google AI Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Orchestration & Chat | Google Gemini 2.5 Pro |
-| Task / Note / Voice Agents | Google Gemini 2.5 Flash |
-| Vision Analysis | Google Gemini 2.5 Flash Vision |
-| Voice Transcription | Google Gemini 2.5 Flash TTS Preview |
-| Agent Framework | Google ADK 1.x |
-| Tool Integration | MCP (Model Context Protocol) |
+| Orchestration & Chat | **Google Gemini 2.0 Pro** via **Vertex AI** |
+| Task / Note / Voice Agents | **Google Gemini 2.0 Flash** via Vertex AI |
+| Vision Analysis | **Google Gemini 2.0 Flash Vision** |
+| Semantic Embeddings | **Gemini text-embedding-004** (768-dim vectors) |
+| Agent Framework | **Google ADK 1.x** |
+| Calendar Integration | **Google Calendar API v3** (OAuth2) |
+| Gmail Integration | **Gmail API** (OAuth2) |
+| Cloud Deployment | **Google Cloud Run** (serverless, auto-scaling) |
+| AI Routing | **Vertex AI** (all Gemini calls routed via `GOOGLE_GENAI_USE_VERTEXAI=1`) |
+| CI/CD | **Google Cloud Build** + **Artifact Registry** |
 
 ### Backend Layer
 
 | Component | Technology |
 |-----------|-----------|
-| REST API + WebSocket | FastAPI 0.115 + Uvicorn |
+| REST API + WebSocket | FastAPI 0.115 + Uvicorn / Gunicorn |
 | Authentication | python-jose (JWT) + passlib (bcrypt) |
 | Background Jobs | APScheduler |
 | HTTP Client | httpx (async) |
@@ -200,22 +229,62 @@ Link your AIDEN account and interact from anywhere:
 | Component | Technology |
 |-----------|-----------|
 | Primary Database | MongoDB 7 + motor (async driver) |
-| Vector / Semantic Search | ChromaDB (local persistent library) |
-| JWT Token Store | MongoDB `jwt_tokens` with TTL index |
-| OAuth Credentials | MongoDB `user_credentials` (encrypted) |
+| Vector / Semantic Search | **ChromaDB** + **Gemini text-embedding-004** |
+| Agent Execution History | MongoDB `agent_traces` collection |
+| OAuth Credentials | MongoDB `user_credentials` |
 | Agent Sessions | MongoDB `adk_sessions` |
 
-### Frontend & Infrastructure
+### Quality & Infrastructure
 
 | Component | Technology |
 |-----------|-----------|
-| UI | Vanilla HTML / CSS / JS (single file) |
-| Typography | Syne + JetBrains Mono + Lora |
-| Containerization | Docker + Docker Compose |
-| Telegram Integration | python-telegram-bot 21 |
-| Resilience | tenacity (retry logic) |
+| Tests | pytest + pytest-asyncio (44 tests, ~65% coverage) |
+| Containerisation | Docker + Docker Compose |
+| Cloud Infrastructure | Google Cloud Run, Secret Manager, Artifact Registry |
+| Telegram Bot | python-telegram-bot 21 |
 
 </div>
+
+<br/>
+
+---
+
+## ☁️ &nbsp;Cloud Deployment (Google Cloud Run + Vertex AI)
+
+AIDEN is deployed on Google Cloud infrastructure. All Gemini calls are routed through **Vertex AI** — not the public API endpoint.
+
+### One-shot setup
+
+```bash
+export PROJECT_ID="your-gcp-project-id"
+chmod +x deploy/setup_gcp.sh
+./deploy/setup_gcp.sh          # enables APIs, creates secrets, grants IAM
+```
+
+### Deploy via Cloud Build
+
+```bash
+gcloud builds submit --config=cloudbuild.yaml \
+    --substitutions=_PROJECT_ID=$PROJECT_ID
+```
+
+Cloud Build automatically:
+1. Builds the Docker image
+2. Pushes to Artifact Registry
+3. Deploys to Cloud Run with Secret Manager secrets
+4. Prints the live URL
+
+### Vertex AI routing
+
+Set `GOOGLE_CLOUD_PROJECT` in `.env` (or Cloud Run env vars) and AIDEN automatically routes all Gemini calls through Vertex AI at startup:
+
+```bash
+# .env
+GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+```
+
+No agent or tool code changes required — ADK honours `GOOGLE_GENAI_USE_VERTEXAI=1` at the SDK level.
 
 <br/>
 
@@ -229,7 +298,8 @@ Link your AIDEN account and interact from anywhere:
 |-------------|---------|-------|
 | Python | 3.11+ | [python.org](https://python.org) |
 | MongoDB | 7.0 | Local install **or** Docker |
-| Gemini API Key | — | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) — free tier available |
+| Gemini API Key | — | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
+| GCP Project | — | Optional — for Vertex AI + Cloud Run |
 
 <br/>
 
@@ -238,24 +308,19 @@ Link your AIDEN account and interact from anywhere:
 ## 🍎 &nbsp;macOS
 
 ```bash
-# 1 — Clone
-git clone https://github.com/your-org/aiden.git && cd aiden
+git clone <repo-url> && cd aiden
 
-# 2 — First-time setup  (creates .env, installs deps, generates JWT secret)
-chmod +x setup.sh start.sh
-./setup.sh
+# First-time setup (creates .env, installs deps)
+chmod +x setup.sh && ./setup.sh
 
-# 3 — Start  (local MongoDB)
+# Edit .env and add your keys
+nano .env
+
+# Start full stack
 ./start.sh
-
-# 3 — Start  (Docker MongoDB)
-./start.sh --docker
-
-# 4 — Stop
-./start.sh --stop
 ```
 
-Browser opens automatically at **http://localhost:3000**
+Open **http://localhost:8000/docs** for the API, serve `ui_react/index.html` directly in your browser for the UI.
 
 <br/>
 
@@ -264,25 +329,12 @@ Browser opens automatically at **http://localhost:3000**
 ## 🐧 &nbsp;Linux
 
 ```bash
-# Install Python 3.11 if needed
-sudo apt update && sudo apt install python3.11 python3.11-venv python3-pip -y
-
-# Clone
-git clone https://github.com/your-org/aiden.git && cd aiden
-
-# First-time setup
+git clone <repo-url> && cd aiden
 chmod +x setup.sh start.sh
 ./setup.sh
-
-# Start with Docker MongoDB (recommended on Linux)
-./start.sh --docker
-
-# Or with a locally running MongoDB
-sudo systemctl start mongod
+nano .env          # set GEMINI_API_KEY and JWT_SECRET
 ./start.sh
 ```
-
-> **WSL2**: Use `./start.sh --docker` with Docker Desktop (WSL2 backend enabled).
 
 <br/>
 
@@ -291,26 +343,11 @@ sudo systemctl start mongod
 ## 🪟 &nbsp;Windows (PowerShell)
 
 ```powershell
-# Step 1 — Allow scripts  (run once as Administrator)
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-# Step 2 — Clone
-git clone https://github.com/your-org/aiden.git; cd aiden
-
-# Step 3 — Start  (first run auto-creates .env and installs deps)
-.\start.ps1
-
-# With Docker MongoDB
-.\start.ps1 -Docker
-
-# Force reinstall dependencies
-.\start.ps1 -Setup
-
-# Stop all services
-.\start.ps1 -Stop
+git clone <repo-url>; cd aiden
+.\start.ps1 -Setup      # first-time setup
+# Edit .env
+.\start.ps1             # start full stack
 ```
-
-On first run the script opens `.env` in Notepad so you can add your API key, then continues automatically.
 
 <br/>
 
@@ -318,18 +355,11 @@ On first run the script opens `.env` in Notepad so you can add your API key, the
 
 ## 🐳 &nbsp;Docker — MongoDB Only
 
-The project runs Python services locally and MongoDB in Docker. ChromaDB is a library — no container needed.
-
 ```bash
-# Start MongoDB container
-cd deploy && docker compose up -d mongo
-
-# Verify health
-docker exec aiden_mongo mongosh --eval "db.adminCommand('ping')"
-
-# Then start AIDEN normally
-cd .. && ./start.sh
+docker compose -f deploy/docker-compose.yml up -d
 ```
+
+Only MongoDB runs in Docker. The FastAPI server runs natively (for live-reload dev).
 
 <br/>
 
@@ -337,74 +367,62 @@ cd .. && ./start.sh
 
 ## ⚙️ &nbsp;Configuration Reference
 
-<br/>
+### Required
 
-### Required — must be set before first run
-
-```env
-# Gemini API — https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=your_key_here
-
-# JWT Secret — minimum 32 characters
-# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-JWT_SECRET=your_minimum_32_character_secret
-JWT_EXPIRE_MINUTES=1440        # 24 h — tokens auto-rotate in the DB
-```
-
-<br/>
-
-### Database
-
-```env
+```bash
+# .env
+GEMINI_API_KEY=your_gemini_api_key_here         # Get from aistudio.google.com
+JWT_SECRET=your_min_32_char_secret_here          # python -c "import secrets; print(secrets.token_urlsafe(32))"
 MONGO_URI=mongodb://localhost:27017
-MONGO_DB=aiden
-CHROMA_PATH=./data/chroma      # ChromaDB stores data on disk here
 ```
 
-<br/>
+### Google Cloud / Vertex AI (recommended)
 
-### Optional — Gmail Integration
+```bash
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id        # Enables Vertex AI routing
+GOOGLE_CLOUD_LOCATION=us-central1
+```
 
-```env
-# 1. https://console.cloud.google.com/apis/credentials
-# 2. Create → OAuth 2.0 Client ID → Web application
-# 3. Authorized Redirect URI: http://localhost:8000/auth/gmail/callback
-# 4. Enable the Gmail API in the API Library
-GMAIL_CLIENT_ID=your_client_id.apps.googleusercontent.com
-GMAIL_CLIENT_SECRET=your_client_secret
+When `GOOGLE_CLOUD_PROJECT` is set, AIDEN automatically routes all Gemini calls through Vertex AI at startup. When unset, it falls back to the direct Gemini API — no code changes needed.
 
+### Gmail + Google Calendar OAuth2
+
+```bash
+GMAIL_CLIENT_ID=your_oauth_client_id
+GMAIL_CLIENT_SECRET=your_oauth_client_secret
+# Redirect URIs to add in Google Cloud Console:
+#   http://localhost:8000/auth/gmail/callback
+#   http://localhost:8000/auth/calendar/callback
+```
+
+### Optional
+
+```bash
+TELEGRAM_BOT_TOKEN=                              # BotFather token; empty = disabled
+CHROMA_PATH=./data/chroma                        # ChromaDB data directory
 GMAIL_POLL_INTERVAL_MINUTES=15
-GMAIL_MAX_EMAILS_PER_RUN=30
-GMAIL_MARK_READ_AFTER_TASK=true
+DEFAULT_MODEL=gemini-2.0-flash
+ORCHESTRATOR_MODEL=gemini-2.0-pro
 ```
 
 <br/>
 
-### Optional — Telegram Bot
+---
 
-```env
-# Get token from @BotFather → /newbot
-TELEGRAM_BOT_TOKEN=
+## 🎬 &nbsp;Evaluator Quick-Start (Demo Mode)
 
-AIDEN_API_URL=http://localhost:8000    # OAuth callbacks
-AIDEN_UI_URL=http://localhost:3000     # Gmail post-auth redirect
-```
+For judges evaluating the system:
 
-<br/>
+1. **Start the server** — `./start.sh`
+2. **Open the UI** — serve `ui_react/index.html`
+3. **Register** an account
+4. **Click 🎬 Demo Mode** — seeds 6 tasks + 3 notes, launches guided tour
+5. **Click "Plan my week"** — watch 3+ agents chain in the live trace panel
+6. **Check History tab** — full audit trail of every execution
 
-### Server & Models
-
-```env
-API_HOST=0.0.0.0
-API_PORT=8000
-API_WORKERS=1
-
-DEFAULT_MODEL=Gemini-2.5-flash
-ORCHESTRATOR_MODEL=Gemini-2.5-pro
-VISION_MODEL=Gemini-2.5-flash
-
-ENV=development          # development | production | test
-DEBUG=true
+Or verify the embedding stack independently:
+```bash
+python scripts/verify_embeddings.py
 ```
 
 <br/>
@@ -413,30 +431,15 @@ DEBUG=true
 
 ## 🔑 &nbsp;Authentication Flow
 
-No token pasting. No terminal commands. Pure UI.
+```
+POST /auth/register  →  creates user, returns JWT
+POST /auth/login     →  returns JWT
+GET  /auth/gmail     →  starts Gmail OAuth2 flow
+GET  /auth/calendar  →  starts Calendar OAuth2 flow
+GET  /auth/me        →  returns user + integration status
+```
 
-```
- Register  ──or──  Login
-      │                │
-      ▼                ▼
-POST /auth/register   POST /auth/login
- { name, email, pw }   { email, pw }
-           │
-           ▼
-   ┌───────────────────────────────┐
-   │   jwt_tokens  (MongoDB)       │
-   │   Valid token exists?         │
-   │     YES → return it as-is     │
-   │     NO  → mint new JWT        │
-   │           store + TTL index   │
-   │           auto-purge on expiry│
-   └───────────────────────────────┘
-           │
-           ▼
-   Saved to localStorage
-   Restored on page refresh
-   Logout → revoked in DB
-```
+All protected endpoints require `Authorization: Bearer <token>`.
 
 <br/>
 
@@ -444,62 +447,50 @@ POST /auth/register   POST /auth/login
 
 ## 📡 &nbsp;API Reference
 
-Full interactive docs at **http://localhost:8000/docs**
-
-<br/>
-
-<details>
-<summary><strong>Auth Endpoints</strong></summary>
-<br/>
-
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/auth/register` | Create account → JWT |
-| `POST` | `/auth/login` | Authenticate → JWT (reuses valid token) |
-| `POST` | `/auth/logout` | Revoke all active tokens |
-| `GET` | `/auth/me` | Current user info + integration status |
-| `GET` | `/auth/gmail` | Start Gmail OAuth flow |
-| `GET` | `/auth/gmail/callback` | Gmail OAuth callback → redirects to UI |
-| `DELETE` | `/auth/gmail` | Disconnect Gmail |
-
-</details>
-
-<details>
-<summary><strong>Tasks & Habits</strong></summary>
-<br/>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/tasks` | List tasks (filter by status, priority, tags) |
+| `POST` | `/chat` | SSE streaming chat — multi-agent with live trace |
+| `POST` | `/chat/sync` | Non-streaming chat (programmatic clients) |
+| `GET`  | `/chat/history` | Past agent executions from MongoDB |
 | `POST` | `/tasks` | Create task |
-| `PATCH` | `/tasks/{id}` | Update task |
-| `DELETE` | `/tasks/{id}` | Delete task |
-| `POST` | `/tasks/{id}/complete` | Complete task + update streak |
-| `GET` | `/tasks/recurring` | List recurring task templates |
-| `POST` | `/tasks/recurring` | Create recurring task |
-| `GET` | `/habits` | All habits with streak data |
-| `POST` | `/habits/{id}/complete` | Mark habit done today |
+| `GET`  | `/tasks` | List tasks (with filters) |
+| `PATCH`| `/tasks/{id}` | Update task |
+| `DELETE`| `/tasks/{id}` | Delete task |
+| `POST` | `/notes` | Create note + index Gemini embedding |
+| `GET`  | `/notes` | List notes |
+| `GET`  | `/notes/search?q=` | Semantic search (Gemini text-embedding-004) |
+| `GET`  | `/notes/search/verify` | Confirm Gemini embeddings are live (768-dim check) |
+| `POST` | `/demo/seed` | Seed demo data (tasks + notes, idempotent) |
+| `GET`  | `/forecast` | ML workload forecast |
+| `GET`  | `/briefing` | Daily structured briefing |
+| `GET`  | `/health` | Server health check |
+| `GET`  | `/docs` | Interactive OpenAPI docs |
 
-</details>
-
-<details>
-<summary><strong>Notes, Voice, Vision, Forecast, Briefing</strong></summary>
 <br/>
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/notes` | List notes (vector search supported) |
-| `POST` | `/notes` | Create note |
-| `POST` | `/voice/transcribe` | Transcribe audio via Gemini |
-| `POST` | `/vision/analyze` | Analyze image (base64 JSON) |
-| `POST` | `/vision/analyze/upload` | Analyze image (multipart) |
-| `GET` | `/forecast` | 14-day ML workload forecast |
-| `GET` | `/forecast/explain` | Plain-English explanation |
-| `GET` | `/briefing/today` | Today's morning briefing |
-| `POST` | `/briefing/today/read` | Mark briefing as read |
-| `GET` | `/health` | Server health + service status |
+---
 
-</details>
+## 🧪 &nbsp;Tests
+
+44 tests across 4 modules — no real API keys or database connections needed.
+
+```bash
+# Install dev extras
+pip install -e ".[dev]"
+
+# Run all tests
+pytest tests/ -v
+
+# With coverage report
+pytest tests/ -v --cov=src --cov-report=term-missing
+```
+
+| Module | Tests | What's covered |
+|--------|-------|---------------|
+| `test_task_repo.py` | 12 | CRUD, user-scoping security, update/delete contracts |
+| `test_vector_repo.py` | 10 | Gemini vector passing, score conversion, RETRIEVAL_QUERY isolation |
+| `test_orchestrator.py` | 12 | SSE stream contract, multi-agent routing, session handling |
+| `test_chat_endpoint.py` | 10 | Chat sync/SSE, notes search scoring, demo seed endpoint |
 
 <br/>
 
@@ -511,59 +502,58 @@ Full interactive docs at **http://localhost:8000/docs**
 aiden/
 ├── src/
 │   ├── agents/
-│   │   ├── orchestrator.py       ← Gemini 2.5 Pro routing agent
-│   │   ├── task_agent.py         ← TaskMaster specialist
-│   │   ├── calendar_agent.py     ← CalendarBot + MCP
-│   │   ├── notes_agent.py        ← NoteKeeper + semantic search
-│   │   ├── voice_agent.py        ← Audio transcription pipeline
-│   │   └── vision_agent.py       ← Image classification + extraction
+│   │   ├── orchestrator.py       ← Primary routing agent (Gemini 2.0 Pro)
+│   │   ├── task_agent.py         ← TaskMaster sub-agent
+│   │   ├── calendar_agent.py     ← CalendarBot — 5 live Google Calendar tools
+│   │   ├── notes_agent.py        ← NoteKeeper — semantic search
+│   │   ├── voice_agent.py        ← Gemini Live audio
+│   │   └── vision_agent.py       ← Gemini Vision
 │   ├── api/
-│   │   ├── main.py               ← FastAPI app, CORS, lifespan
-│   │   ├── middleware.py         ← JWT validation, RBAC
-│   │   └── routers/              ← One file per domain
-│   │       ├── auth.py           ← Register, login, Gmail OAuth
+│   │   ├── main.py               ← FastAPI app — Vertex AI init at startup
+│   │   └── routers/
+│   │       ├── chat.py           ← SSE streaming with live trace emission
+│   │       ├── notes.py          ← /notes/search + /notes/search/verify
+│   │       ├── demo.py           ← POST /demo/seed (idempotent seed endpoint)
 │   │       ├── tasks.py
-│   │       ├── notes.py
-│   │       ├── habits.py
-│   │       ├── voice.py + voice_ws.py
-│   │       ├── vision.py
-│   │       ├── briefing.py
-│   │       ├── forecast.py
-│   │       └── preferences.py
-│   ├── analytics/
-│   │   ├── workload_forecaster.py  ← EWMA + DP rescheduling (no LLM)
-│   │   └── briefing_generator.py  ← Daily briefing builder (no LLM)
+│   │       ├── auth.py           ← JWT + Google OAuth2
+│   │       └── ...
 │   ├── core/
-│   │   ├── config.py             ← pydantic-settings .env loader
-│   │   ├── db_init.py            ← MongoDB schema + TTL indexes
-│   │   ├── scheduler.py          ← APScheduler recurring jobs
-│   │   └── session.py            ← ADK session service
-│   ├── integrations/
-│   │   └── telegram_bot.py       ← python-telegram-bot 21
-│   ├── models/
-│   │   ├── user.py               ← UserClaims, User, TokenResponse
-│   │   ├── task.py               ← Task, RecurringTask, HabitSummary
-│   │   ├── note.py
-│   │   └── user_prefs.py         ← Gmail + Telegram preferences
+│   │   ├── runner.py             ← AIDENRunner — ADK + SSE trace streaming
+│   │   ├── tracer.py             ← TraceCollector — step capture + MongoDB persist
+│   │   ├── vertex_init.py        ← Vertex AI SDK init (GOOGLE_GENAI_USE_VERTEXAI=1)
+│   │   ├── config.py             ← pydantic-settings (GOOGLE_CLOUD_PROJECT etc.)
+│   │   ├── db_init.py
+│   │   └── scheduler.py
 │   ├── repositories/
-│   │   ├── user_repo.py          ← User CRUD + JWT lifecycle
 │   │   ├── task_repo.py
 │   │   ├── notes_repo.py
-│   │   ├── vector_repo.py        ← ChromaDB semantic search
-│   │   └── prefs_repo.py
+│   │   ├── vector_repo.py        ← ChromaDB + Gemini text-embedding-004
+│   │   └── user_repo.py
 │   └── services/
-│       ├── gmail_direct.py       ← Gmail REST API + OAuth tokens
-│       └── gmail_pipeline.py     ← Background inbox polling
+│       ├── google_calendar.py    ← Google Calendar REST API v3 client
+│       └── gmail_pipeline.py
+├── tests/
+│   ├── conftest.py               ← Shared fixtures (fake user, mock MongoDB, 768-dim vector)
+│   ├── test_repositories/
+│   │   ├── test_task_repo.py     ← 12 tests
+│   │   └── test_vector_repo.py   ← 10 tests (Gemini embedding verification)
+│   ├── test_agents/
+│   │   └── test_orchestrator.py  ← 12 tests (SSE stream contract)
+│   └── test_api/
+│       └── test_chat_endpoint.py ← 10 tests (chat + notes search + demo)
+├── scripts/
+│   └── verify_embeddings.py      ← Standalone Gemini embedding smoke-test
 ├── ui_react/
-│   └── index.html                ← Complete single-file UI
+│   └── index.html                ← Complete single-file UI (dark theme)
 ├── deploy/
+│   ├── Dockerfile.api            ← Production image (gunicorn + vertexai SDK)
 │   ├── docker-compose.yml        ← MongoDB container
-│   ├── Dockerfile.api
-│   └── Dockerfile.ui
-├── start.sh                      ← macOS/Linux launcher
-├── start.ps1                     ← Windows PowerShell launcher
-├── setup.sh                      ← First-time macOS/Linux setup
+│   └── setup_gcp.sh              ← One-shot GCP provisioning script
+├── cloudbuild.yaml               ← Cloud Build CI/CD pipeline
 ├── pyproject.toml
+├── pytest.ini
+├── start.sh                      ← macOS/Linux launcher
+├── start.ps1                     ← Windows launcher
 └── .env.example
 ```
 
@@ -576,14 +566,13 @@ aiden/
 | Script | Platform | Command | What it does |
 |--------|----------|---------|-------------|
 | `setup.sh` | macOS/Linux | `./setup.sh` | First-time: `.env`, venv, deps |
-| `start.sh` | macOS/Linux | `./start.sh` | Full stack — local MongoDB |
-| `start.sh` | macOS/Linux | `./start.sh --docker` | Full stack — Docker MongoDB |
+| `start.sh` | macOS/Linux | `./start.sh` | Full stack |
+| `start.sh` | macOS/Linux | `./start.sh --docker` | Docker MongoDB |
 | `start.sh` | macOS/Linux | `./start.sh --stop` | Kill all services |
-| `start.sh` | macOS/Linux | `./start.sh --setup` | Force reinstall deps |
 | `start.ps1` | Windows | `.\start.ps1` | Full stack |
 | `start.ps1` | Windows | `.\start.ps1 -Docker` | Docker MongoDB |
-| `start.ps1` | Windows | `.\start.ps1 -Stop` | Kill all services |
-| `start.ps1` | Windows | `.\start.ps1 -Setup` | Force reinstall |
+| `deploy/setup_gcp.sh` | Any | `./deploy/setup_gcp.sh` | GCP provisioning |
+| `cloudbuild.yaml` | GCP | `gcloud builds submit` | Cloud Run deploy |
 
 <br/>
 
@@ -591,16 +580,16 @@ aiden/
 
 ## 🔧 &nbsp;Troubleshooting
 
-| Symptom | Likely Cause | Fix |
+| Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| `GEMINI_API_KEY is not set` | Missing `.env` value | `./setup.sh` or edit `.env` |
-| `JWT_SECRET too short` | Less than 32 chars | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `GEMINI_API_KEY is not set` | Missing `.env` | `./setup.sh` or edit `.env` |
+| `JWT_SECRET too short` | < 32 chars | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | API not reachable | Server crashed | Check `logs/api.log` |
-| MongoDB connection refused | MongoDB not running | `./start.sh --docker` or `sudo systemctl start mongod` |
-| Port already in use | Stale process | `./start.sh --stop` then retry |
-| Gmail OAuth fails | Missing credentials | Add `GMAIL_CLIENT_ID` + `GMAIL_CLIENT_SECRET` to `.env` |
-| Gmail redirect error | Wrong redirect URI | Add `http://localhost:8000/auth/gmail/callback` in Google Cloud Console |
-| Dependencies broken | Corrupt `.venv` | `./start.sh --setup` |
+| MongoDB refused | Not running | `./start.sh --docker` or `sudo systemctl start mongod` |
+| Port in use | Stale process | `./start.sh --stop` then retry |
+| Vertex AI 403 | ADC not set | `gcloud auth application-default login` |
+| Embedding dims ≠ 768 | Wrong model | Check `GEMINI_API_KEY` is valid; run `python scripts/verify_embeddings.py` |
+| Gmail OAuth fails | Wrong redirect URI | Add `http://localhost:8000/auth/gmail/callback` in Google Cloud Console |
 
 <br/>
 
@@ -608,10 +597,17 @@ aiden/
 
 ## 🗺️ &nbsp;Roadmap
 
-- [ ] Production deployment (HTTPS, Nginx, Docker Compose full-stack)
-- [ ] Google Calendar real-time sync via official API
+- [x] Multi-agent orchestration with Google ADK
+- [x] Live agent trace panel (real-time SSE streaming)
+- [x] Google Calendar API v3 integration (5 live tools)
+- [x] Gemini text-embedding-004 semantic search
+- [x] Google Cloud Run deployment
+- [x] Vertex AI routing for all Gemini calls
+- [x] Workflow history & audit trail (MongoDB)
+- [x] Demo Mode + guided onboarding tour
+- [x] Test suite (44 tests, ~65% coverage)
+- [ ] Google Drive MCP integration
 - [ ] Slack integration (slash commands + notifications)
-- [ ] API key authentication for developer access
 - [ ] Mobile PWA (installable from browser)
 - [ ] Multi-workspace / team support
 - [ ] Custom agent plugins via MCP
@@ -623,19 +619,19 @@ aiden/
 ## 🤝 &nbsp;Contributing
 
 ```bash
-# Fork → clone → branch
 git checkout -b feature/your-feature-name
 
 # Install with dev extras
 pip install -e ".[dev]"
 
 # Run tests
-pytest
+pytest tests/ -v
 
 # Lint + format
 ruff check src/ && black src/
 
-# Open a PR against main
+# Verify Gemini embeddings
+python scripts/verify_embeddings.py
 ```
 
 <br/>
@@ -648,16 +644,8 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 <br/>
 
----
-
 <div align="center">
 
-**Built with Google Gemini · Google ADK · FastAPI · MongoDB**
-
-*AIDEN v2.0 — 2026*
-
-<br/>
-
-[![GitHub stars](https://img.shields.io/github/stars/your-org/aiden?style=social)](https://github.com/your-org/aiden)
+*Built with Google ADK · Gemini 2.0 · Vertex AI · Cloud Run · text-embedding-004*
 
 </div>
