@@ -1,0 +1,94 @@
+# cloudbuild.yaml — AIDEN automated CI/CD to Cloud Run + Vertex AI
+#
+# Usage:
+#   gcloud builds submit --config=cloudbuild.yaml \
+#       --substitutions=_PROJECT_ID=your-project-id
+#
+# Or trigger automatically via Cloud Build GitHub trigger.
+#
+# Required APIs (enable once):
+#   gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+#     cloudbuild.googleapis.com aiplatform.googleapis.com secretmanager.googleapis.com
+
+substitutions:
+  _PROJECT_ID: "${PROJECT_ID}"
+  _REGION: "us-central1"
+  _REPO: "aiden"
+  _SERVICE: "aiden-api"
+  _IMAGE: "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/api"
+
+steps:
+  - id: build
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - "--file=deploy/Dockerfile.api"
+      - "--tag=${_IMAGE}:${COMMIT_SHA}"
+      - "--tag=${_IMAGE}:latest"
+      - "--cache-from=${_IMAGE}:latest"
+      - "."
+
+  - id: push
+    name: "gcr.io/cloud-builders/docker"
+    waitFor: [build]
+    args:
+      - push
+      - "--all-tags"
+      - "${_IMAGE}"
+
+  - id: deploy
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    waitFor: [push]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - "${_SERVICE}"
+      - "--image=${_IMAGE}:${COMMIT_SHA}"
+      - "--region=${_REGION}"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--memory=1Gi"
+      - "--cpu=1"
+      - "--timeout=120"
+      - "--concurrency=80"
+      - "--min-instances=0"
+      - "--max-instances=10"
+
+      - "--set-secrets=MONGO_URI=AIDEN_MONGO_URI:latest"
+      - "--set-secrets=GEMINI_API_KEY=AIDEN_GEMINI_API_KEY:latest"
+      - "--set-secrets=JWT_SECRET=AIDEN_JWT_SECRET:latest"
+      - "--set-secrets=GMAIL_CLIENT_ID=AIDEN_GOOGLE_CLIENT_ID:latest"
+      - "--set-secrets=GMAIL_CLIENT_SECRET=AIDEN_GOOGLE_CLIENT_SECRET:latest"
+
+      - "--set-env-vars=GOOGLE_CLOUD_PROJECT=${_PROJECT_ID}"
+      - "--set-env-vars=GOOGLE_CLOUD_LOCATION=${_REGION}"
+      - "--set-env-vars=GOOGLE_GENAI_USE_VERTEXAI=1"
+      - "--set-env-vars=ENV=production"
+      - "--set-env-vars=DEBUG=false"
+      - "--set-env-vars=MONGO_DB=aiden"
+      - "--set-env-vars=CHROMA_PATH=/tmp/chroma"
+
+  - id: print-url
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    waitFor: [deploy]
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        URL=$(gcloud run services describe ${_SERVICE} \
+          --region=${_REGION} --format='value(status.url)')
+        echo "========================================"
+        echo " AIDEN deployed successfully!"
+        echo " Live URL: $${URL}"
+        echo " Health:   $${URL}/health"
+        echo " API docs: $${URL}/docs"
+        echo "========================================"
+
+images:
+  - "${_IMAGE}:${COMMIT_SHA}"
+  - "${_IMAGE}:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: "E2_HIGHCPU_8"

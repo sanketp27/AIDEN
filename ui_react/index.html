@@ -882,14 +882,28 @@
         <div style="width:100%;display:flex;align-items:center;gap:8px;margin-bottom:4px">
           <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:.15em;color:var(--text3)">WORKFLOW SCENARIOS</span>
           <div style="flex:1;height:1px;background:var(--border)"></div>
+          <!-- Demo Mode button — seeds realistic data + launches guided tour -->
+          <button id="demo-mode-btn" onclick="activateDemoMode()" style="
+            display:flex;align-items:center;gap:6px;
+            padding:5px 12px;
+            background:linear-gradient(135deg,rgba(15,110,86,.25),rgba(24,95,165,.25));
+            border:1px solid rgba(99,179,237,.35);
+            border-radius:6px;
+            font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;
+            color:var(--cyan);cursor:pointer;transition:all .2s;
+            flex-shrink:0;
+          " onmouseover="this.style.borderColor='var(--cyan)';this.style.background='var(--cyan-dim)'"
+             onmouseout="this.style.borderColor='rgba(99,179,237,.35)';this.style.background='linear-gradient(135deg,rgba(15,110,86,.25),rgba(24,95,165,.25))'">
+            🎬 Demo Mode
+          </button>
         </div>
-        <button class="quick-btn workflow-btn" onclick="runWorkflow('plan_week')" title="Triggers: Orchestrator → TaskMaster → CalendarBot → NoteKeeper">
+        <button id="wf-plan-week" class="quick-btn workflow-btn" onclick="runWorkflow('plan_week')" title="Triggers: Orchestrator → TaskMaster → CalendarBot → NoteKeeper">
           <span class="wf-icon">◈</span> Plan my week
         </button>
-        <button class="quick-btn workflow-btn" onclick="runWorkflow('prep_meeting')" title="Triggers: CalendarBot → NoteKeeper → TaskMaster">
+        <button id="wf-prep-meeting" class="quick-btn workflow-btn" onclick="runWorkflow('prep_meeting')" title="Triggers: CalendarBot → NoteKeeper → TaskMaster">
           <span class="wf-icon">◷</span> Prepare for my next meeting
         </button>
-        <button class="quick-btn workflow-btn" onclick="runWorkflow('inbox')" title="Triggers: Gmail → Orchestrator → TaskMaster × N">
+        <button id="wf-inbox" class="quick-btn workflow-btn" onclick="runWorkflow('inbox')" title="Triggers: Gmail → Orchestrator → TaskMaster × N">
           <span class="wf-icon">✉</span> Process my inbox
         </button>
         <div style="width:100%;display:flex;align-items:center;gap:8px;margin-top:6px;margin-bottom:2px">
@@ -1596,6 +1610,155 @@ function handleKey(e) {
 function sendQuick(msg) {
   document.getElementById('chat-input').value = msg;
   sendMessage();
+}
+
+// ── DEMO MODE & GUIDED TOUR ───────────────────────────────────────────────────
+
+const TOUR_STEPS = [
+  {
+    target:   '#wf-plan-week',
+    title:    '1 / 5 · Multi-Agent Workflow Buttons',
+    body:     'Click any of these to chain 3+ agents together. Watch the live trace panel fire in real time — routing decisions, tool calls, and results as they happen.',
+    position: 'bottom',
+  },
+  {
+    target:   '#live-trace-drawer',
+    title:    '2 / 5 · Live Agent Trace Panel',
+    body:     'Every routing hop, tool call, and sub-agent result streams here during execution. It\'s proof of multi-agent coordination — visible in real time.',
+    position: 'bottom',
+  },
+  {
+    target:   '#nav-tasks',
+    title:    '3 / 5 · Task Manager',
+    body:     '6 realistic tasks are loaded with priorities, due dates, and tags. Ask AIDEN to prioritise, update, or block calendar time for any of them.',
+    position: 'right',
+  },
+  {
+    target:   '#nav-notes',
+    title:    '4 / 5 · Notes + Semantic Search',
+    body:     '3 rich notes are indexed using Gemini text-embedding-004 vectors in ChromaDB. Try: "What did I write about the board meeting?"',
+    position: 'right',
+  },
+  {
+    target:   '#nav-history',
+    title:    '5 / 5 · Workflow History',
+    body:     'Every agent execution is permanently stored here — a full audit trail with step-by-step trace, timing, and agents involved. Proof it all works.',
+    position: 'right',
+  },
+];
+
+let _tourStep    = 0;
+let _tourActive  = false;
+let _tourEl      = null;
+let _tourTarget  = null;
+
+async function activateDemoMode() {
+  const btn = document.getElementById('demo-mode-btn');
+  if (!token) { showToast('Please log in first', 'error'); return; }
+
+  btn.textContent = '⏳ Loading…';
+  btn.disabled    = true;
+
+  try {
+    const r = await fetch(`${API}/demo/seed`, {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || 'Seed failed');
+
+    btn.textContent = '✓ Demo Ready';
+    btn.style.color = 'var(--green)';
+    btn.style.borderColor = 'rgba(104,211,145,.4)';
+
+    // Refresh data panels
+    await Promise.all([loadTasks(true), loadNotes(true)]);
+    showToast(`Demo loaded: ${data.seeded.tasks} tasks · ${data.seeded.notes} notes`, 'success');
+
+    // Kick off the tour
+    setTimeout(() => startGuidedTour(), 600);
+
+  } catch (e) {
+    btn.textContent = '🎬 Demo Mode';
+    btn.disabled    = false;
+    showToast('Could not load demo data', 'error');
+  }
+}
+
+function startGuidedTour() {
+  _tourStep   = 0;
+  _tourActive = true;
+  _showTourStep(0);
+}
+
+function _showTourStep(index) {
+  _closeTourTooltip();
+  if (index >= TOUR_STEPS.length) { _tourActive = false; return; }
+
+  const step   = TOUR_STEPS[index];
+  const target = document.querySelector(step.target);
+  if (!target) { _showTourStep(index + 1); return; }
+
+  // Highlight target
+  _tourTarget = target;
+  target.style.outline      = '2px solid var(--cyan)';
+  target.style.outlineOffset = '4px';
+  target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Build tooltip
+  const tt = document.createElement('div');
+  tt.id = 'tour-tooltip';
+  tt.style.cssText = `
+    position:fixed;z-index:10000;width:284px;
+    background:var(--bg2);border:1px solid var(--border2);border-radius:12px;
+    padding:16px 18px;box-shadow:0 8px 32px rgba(0,0,0,.35);
+    font-family:var(--font-mono);animation:msgIn .2s ease;
+  `;
+
+  const rect = target.getBoundingClientRect();
+  let top, left;
+  if (step.position === 'bottom') {
+    top  = Math.min(rect.bottom + 10, window.innerHeight - 200);
+    left = Math.max(8, Math.min(rect.left, window.innerWidth - 300));
+  } else {
+    top  = Math.max(8, rect.top);
+    left = Math.min(rect.right + 10, window.innerWidth - 300);
+  }
+  tt.style.top  = top  + 'px';
+  tt.style.left = left + 'px';
+
+  const dots = TOUR_STEPS.map((_, i) =>
+    `<div style="width:5px;height:5px;border-radius:50%;background:${i===index?'var(--cyan)':'var(--text3)'}"></div>`
+  ).join('');
+
+  tt.innerHTML = `
+    <div style="font-size:9px;letter-spacing:.14em;color:var(--text3);margin-bottom:6px">${step.title}</div>
+    <div style="font-size:12px;color:var(--text);line-height:1.6;margin-bottom:14px">${step.body}</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;gap:5px;flex:1">${dots}</div>
+      <button onclick="_closeTourTooltip()" style="
+        font-size:10px;padding:4px 10px;border-radius:5px;
+        border:1px solid var(--border2);background:transparent;
+        color:var(--text2);cursor:pointer">Skip</button>
+      <button onclick="_showTourStep(${index + 1})" style="
+        font-size:10px;padding:4px 12px;border-radius:5px;border:none;
+        background:var(--cyan);color:var(--bg);cursor:pointer;font-weight:700">
+        ${index < TOUR_STEPS.length - 1 ? 'Next →' : 'Done ✓'}</button>
+    </div>
+  `;
+
+  document.body.appendChild(tt);
+  _tourEl = tt;
+}
+
+function _closeTourTooltip() {
+  if (_tourEl)    { _tourEl.remove();    _tourEl = null; }
+  if (_tourTarget) {
+    _tourTarget.style.outline      = '';
+    _tourTarget.style.outlineOffset = '';
+    _tourTarget = null;
+  }
+  _tourActive = false;
 }
 
 // ── MULTI-AGENT WORKFLOW SCENARIOS ───────────────────────────────────

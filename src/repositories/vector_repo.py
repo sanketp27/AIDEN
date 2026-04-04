@@ -1,38 +1,80 @@
-"""
-Vector repository for ChromaDB semantic search
-Per-user collection namespacing for data isolation
+from __future__ import annotations
 
-Uses chromadb.PersistentClient — no Docker/server required.
-Data is stored on disk at settings.CHROMA_PATH (default: ./data/chroma).
-ChromaDB handles embedding automatically using its built-in default model.
-"""
-import chromadb
-from src.core.config import settings
-from typing import Optional
+import asyncio
 import structlog
+from typing import Optional
+
+import chromadb
+import google.generativeai as genai
+
+from src.core.config import settings
 
 log = structlog.get_logger()
 
-# Module-level singleton so the same client is reused across all repo instances.
-# PersistentClient is thread-safe and handles its own file locking internally.
-_chroma_client = None
+_chroma_client: chromadb.PersistentClient | None = None
 
 
 def _get_client() -> chromadb.PersistentClient:
-    """Return (or lazily create) the shared PersistentClient instance."""
     global _chroma_client
     if _chroma_client is None:
         _chroma_client = chromadb.PersistentClient(path=settings.CHROMA_PATH)
-        log.info("chroma_persistent_client_initialized", path=settings.CHROMA_PATH)
+        log.info("chroma_client_initialised", path=settings.CHROMA_PATH)
     return _chroma_client
+
+def _configure_genai() -> None:
+    """Configure google-generativeai SDK with the API key (idempotent)."""
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+
+
+async def _embed_documents(texts: list[str]) -> list[list[float]]:
+    """
+    Embed one or more document texts using Gemini text-embedding-004.
+    Uses RETRIEVAL_DOCUMENT task_type for best indexing recall.
+    Returns a list of 768-dimensional float vectors.
+    """
+    def _sync() -> list[list[float]]:
+        _configure_genai()
+        result = genai.embed_content(
+            model     = "models/text-embedding-004",
+            content   = texts,
+            task_type = "RETRIEVAL_DOCUMENT",
+        )
+        emb = result["embedding"]
+        if emb and isinstance(emb[0], float):
+            return [emb]
+        return list(emb)
+
+    return await asyncio.get_event_loop().run_in_executor(None, _sync)
+
+
+async def _embed_query(query: str) -> list[float]:
+    """
+    Embed a search query using Gemini text-embedding-004.
+    Uses RETRIEVAL_QUERY task_type — optimised for search queries.
+    """
+    def _sync() -> list[float]:
+        _configure_genai()
+        result = genai.embed_content(
+            model     = "models/text-embedding-004",
+            content   = query,
+            task_type = "RETRIEVAL_QUERY",
+        )
+        return result["embedding"]
+
+    return await asyncio.get_event_loop().run_in_executor(None, _sync)
 
 
 class VectorRepository:
-    """Repository for vector embeddings and semantic search"""
+    """
+    ChromaDB repository backed by Google Gemini text-embedding-004.
 
-    def __init__(self):
-        # Defer actual client creation until first use (lazy init)
-        self._client = None
+    Each user gets their own isolated collection (notes_{user_id}).
+    embedding_function=None is always passed so ChromaDB never calls
+    its own model — all vectors come from Gemini.
+    """
+
+    def __init__(self) -> None:
+        self._client: chromadb.PersistentClient | None = None
 
     @property
     def client(self) -> chromadb.PersistentClient:
@@ -40,129 +82,118 @@ class VectorRepository:
             self._client = _get_client()
         return self._client
 
-    def _get_collection_name(self, user_id: str) -> str:
-        """Get user-specific collection name"""
-        return f"notes_{user_id}"
-
-    def _get_or_create_collection(self, user_id: str):
+    def _collection(self, user_id: str) -> chromadb.Collection:
         """
-        Get or create user-specific ChromaDB collection.
-        Uses get_or_create_collection (idiomatic Chroma API) to avoid
-        the try/except create dance that could hide real errors.
+        Get or create the user-specific ChromaDB collection.
+        embedding_function=None tells ChromaDB we supply vectors ourselves.
         """
-        collection_name = self._get_collection_name(user_id)
-        collection = self.client.get_or_create_collection(
-            name=collection_name,
-            metadata={"user_id": user_id, "hnsw:space": "cosine"}
+        return self.client.get_or_create_collection(
+            name               = f"notes_{user_id}",
+            metadata           = {"hnsw:space": "cosine", "user_id": user_id},
+            embedding_function = None,
         )
-        return collection
 
     async def add_embedding(
         self,
-        user_id: str,
+        user_id:     str,
         document_id: str,
-        text: str,
-        metadata: Optional[dict] = None
+        text:        str,
+        metadata:    Optional[dict] = None,
     ) -> None:
-        """
-        Add document embedding to ChromaDB.
-        Uses upsert so calling this twice for the same ID is safe (idempotent).
-        """
-        collection = self._get_or_create_collection(user_id)
-        meta = {**(metadata or {}), "user_id": user_id}
-
-        # upsert = insert or update — avoids duplicate-ID errors on retries
-        collection.upsert(
-            documents=[text],
-            metadatas=[meta],
-            ids=[document_id]
+        """Generate a Gemini embedding and upsert into ChromaDB."""
+        vectors = await _embed_documents([text])
+        meta    = {
+            **(metadata or {}),
+            "user_id": user_id,
+            "model":   "text-embedding-004",
+        }
+        self._collection(user_id).upsert(
+            ids        = [document_id],
+            documents  = [text],
+            embeddings = vectors,
+            metadatas  = [meta],
         )
-        log.info("embedding_added", user_id=user_id, document_id=document_id)
+        log.info(
+            "gemini_embedding_stored",
+            doc_id = document_id,
+            dims   = len(vectors[0]),
+            model  = "text-embedding-004",
+        )
+
+    async def update_embedding(
+        self,
+        user_id:     str,
+        document_id: str,
+        text:        str,
+        metadata:    Optional[dict] = None,
+    ) -> None:
+        """Update an existing embedding (re-embeds and upserts)."""
+        await self.add_embedding(user_id, document_id, text, metadata)
+
+    async def delete_embedding(self, user_id: str, document_id: str) -> None:
+        """Delete a single document embedding by ID."""
+        self._collection(user_id).delete(ids=[document_id])
+        log.info("embedding_deleted", doc_id=document_id)
+
+    async def delete_user_collection(self, user_id: str) -> None:
+        """Delete the entire user collection (e.g. on account deletion)."""
+        name = f"notes_{user_id}"
+        try:
+            self.client.delete_collection(name=name)
+            log.info("chroma_collection_deleted", collection=name)
+        except Exception as exc:
+            log.warning("collection_deletion_failed", collection=name, error=str(exc))
 
     async def semantic_search(
         self,
         user_id: str,
-        query: str,
-        top_k: int = 5,
-        filter_metadata: Optional[dict] = None
+        query:   str,
+        top_k:   int = 5,
+        filter_metadata: Optional[dict] = None,
     ) -> list[dict]:
         """
-        Perform semantic search in user's documents.
-        ChromaDB embeds the query text automatically using its default model.
+        Semantic search using a Gemini RETRIEVAL_QUERY embedding.
+
+        Returns up to top_k results sorted by cosine similarity:
+            {"document_id": str, "text": str, "metadata": dict, "score": float}
+        score is in [0, 1] — 1.0 = perfect match.
         """
-        collection = self._get_or_create_collection(user_id)
-
-        # Build where filter — always scope to this user
-        where = {"user_id": {"$eq": user_id}}
-        if filter_metadata:
-            # Merge extra filters with $and so both conditions apply
-            where = {"$and": [{"user_id": {"$eq": user_id}}, filter_metadata]}
-
-        # Guard: n_results cannot exceed documents in the collection
-        doc_count = collection.count()
+        col       = self._collection(user_id)
+        doc_count = col.count()
         n_results = min(top_k, doc_count) if doc_count > 0 else 0
 
         if n_results == 0:
             log.info("semantic_search_empty_collection", user_id=user_id)
             return []
 
-        results = collection.query(
-            query_texts=[query],
-            n_results=n_results,
-            where=where
+        where: dict = {"user_id": {"$eq": user_id}}
+        if filter_metadata:
+            where = {"$and": [{"user_id": {"$eq": user_id}}, filter_metadata]}
+
+        query_vector = await _embed_query(query)
+
+        results = col.query(
+            query_embeddings = [query_vector],
+            n_results        = n_results,
+            where            = where,
         )
 
-        # Format results into a consistent structure
-        formatted = []
+        formatted: list[dict] = []
         if results["ids"] and results["ids"][0]:
             for i, doc_id in enumerate(results["ids"][0]):
+                distance = results["distances"][0][i] if results.get("distances") else 1.0
                 formatted.append({
                     "document_id": doc_id,
-                    "text": results["documents"][0][i] if results["documents"] else "",
-                    "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                    "distance": results["distances"][0][i] if results.get("distances") else 0.0
+                    "text":        results["documents"][0][i] if results.get("documents") else "",
+                    "metadata":    results["metadatas"][0][i]  if results.get("metadatas")  else {},
+                    "score":       round(1.0 - distance, 4),
                 })
 
         log.info(
-            "semantic_search_completed",
-            user_id=user_id,
-            query_length=len(query),
-            results=len(formatted)
+            "semantic_search_done",
+            user_id   = user_id,
+            query_len = len(query),
+            results   = len(formatted),
+            model     = "text-embedding-004",
         )
         return formatted
-
-    async def update_embedding(
-        self,
-        user_id: str,
-        document_id: str,
-        text: str,
-        metadata: Optional[dict] = None
-    ) -> None:
-        """Update an existing embedding (or create it if missing via upsert)."""
-        collection = self._get_or_create_collection(user_id)
-        meta = {**(metadata or {}), "user_id": user_id}
-        collection.upsert(
-            documents=[text],
-            metadatas=[meta],
-            ids=[document_id]
-        )
-        log.info("embedding_updated", user_id=user_id, document_id=document_id)
-
-    async def delete_embedding(self, user_id: str, document_id: str) -> None:
-        """Delete a single embedding by ID."""
-        collection = self._get_or_create_collection(user_id)
-        collection.delete(ids=[document_id])
-        log.info("embedding_deleted", user_id=user_id, document_id=document_id)
-
-    async def delete_user_collection(self, user_id: str) -> None:
-        """Delete the entire user collection (e.g. on account deletion)."""
-        collection_name = self._get_collection_name(user_id)
-        try:
-            self.client.delete_collection(name=collection_name)
-            log.info("chroma_collection_deleted", collection=collection_name)
-        except Exception as e:
-            log.warning(
-                "collection_deletion_failed",
-                collection=collection_name,
-                error=str(e)
-            )
