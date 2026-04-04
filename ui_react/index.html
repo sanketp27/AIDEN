@@ -363,6 +363,84 @@
       margin-bottom: 4px;
     }
 
+    /* ── GUEST LOGIN ── */
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0 0;
+      color: var(--text3);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .btn-guest {
+      width: 100%;
+      padding: 11px;
+      background: transparent;
+      color: var(--text2);
+      border: 1px solid var(--border2);
+      border-radius: var(--r);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-guest:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: var(--cyan-dim);
+    }
+
+    .btn-guest:active {
+      transform: scale(0.99);
+    }
+
+    .btn-guest .guest-badge {
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 255, 255, 0.2);
+      letter-spacing: 0.12em;
+    }
+
+    .guest-banner {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(0, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--cyan);
+      margin-bottom: 12px;
+      letter-spacing: 0.06em;
+    }
+
+    .guest-banner.visible {
+      display: flex;
+    }
+
     /* ── MAIN LAYOUT ── */
     #app {
       flex: 1;
@@ -2428,6 +2506,17 @@
         </div>
         <div id="login-error" class="auth-error" style="display:none"></div>
         <button class="btn-primary" id="login-btn" onclick="doLogin()">INITIALIZE SESSION</button>
+
+        <div class="auth-divider">OR</div>
+        <button class="btn-guest" id="guest-btn" onclick="doGuestLogin()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          CONTINUE AS GUEST
+          <span class="guest-badge">EVALUATOR</span>
+        </button>
       </div>
 
       <!-- REGISTER FORM -->
@@ -2451,12 +2540,25 @@
         <button class="btn-primary" id="reg-btn" onclick="doRegister()">CREATE ACCOUNT</button>
       </div>
 
-      <div class="auth-hint">API must be running at <span style="color:var(--cyan)">localhost:8000</span></div>
+      <div class="auth-hint">API must be running at <span style="color:var(--cyan)">localhost:8000</span><br />Use <span
+          style="color:var(--cyan)">Guest Login</span> for instant evaluator access — no signup needed</div>
     </div>
   </div>
 
   <!-- MAIN APP -->
   <div id="app" class="hidden">
+
+    <!-- GUEST SESSION BANNER -->
+    <div id="guest-banner" class="guest-banner"
+      style="position:fixed;top:56px;right:20px;z-index:9999;width:auto;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.3);">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+      GUEST SESSION &nbsp;·&nbsp; EVALUATOR MODE &nbsp;·&nbsp; ALL FEATURES ACTIVE
+    </div>
+
     <!-- SIDEBAR -->
     <div class="sidebar">
       <div class="sidebar-nav">
@@ -2980,6 +3082,36 @@
       btn.style.opacity = loading ? '0.6' : '1';
     }
 
+    // ─── GUEST LOGIN ──────────────────────────────────────────────────────
+    async function doGuestLogin() {
+      clearAuthErrors();
+      const btn = document.getElementById('guest-btn');
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        CONNECTING…`;
+      try {
+        const r = await fetch(`${API}/auth/guest`, { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok) {
+          setAuthError('login-error', data.detail || 'Guest login failed.');
+          return;
+        }
+        await _onAuthSuccess(data);
+        // Show persistent in-app guest banner
+        const banner = document.getElementById('guest-banner');
+        if (banner) banner.classList.add('visible');
+      } catch {
+        setAuthError('login-error', 'Cannot reach API at localhost:8000 — is the server running?');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          CONTINUE AS GUEST
+          <span class="guest-badge">EVALUATOR</span>`;
+      }
+    }
+
     // ─── LOGIN ───────────────────────────────────────────────────────────
     async function doLogin() {
       clearAuthErrors();
@@ -3057,6 +3189,12 @@
       checkBriefingUnread();
       loadMe();
       showToast(`Welcome, ${data.name || data.email} ✓`, 'success');
+
+      // Show guest banner for guest role logins
+      if (data.role === 'guest') {
+        const banner = document.getElementById('guest-banner');
+        if (banner) banner.classList.add('visible');
+      }
 
       // Handle ?gmail=connected redirect from OAuth callback
       _checkGmailCallbackParam();
@@ -3138,6 +3276,12 @@
       checkBriefingUnread();
       loadMe();
       _checkGmailCallbackParam();
+
+      // Re-show guest banner if this was a guest session
+      if (currentUser && currentUser.role === 'guest') {
+        const banner = document.getElementById('guest-banner');
+        if (banner) banner.classList.add('visible');
+      }
     }
 
     function _checkGmailCallbackParam() {
