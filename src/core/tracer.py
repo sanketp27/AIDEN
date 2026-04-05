@@ -318,15 +318,29 @@ COLL_TRACES = "agent_traces"
 
 async def persist_trace(trace: AgentTrace) -> None:
     """
-    Fire-and-forget: save the completed trace to MongoDB.
-    Called from the chat router after the SSE stream closes.
-    """
-    try:
-        from motor.motor_asyncio import AsyncIOMotorClient
-        from src.core.config import settings
+    Fire-and-forget: persist the completed trace to BOTH:
+      1. MongoDB  — primary store for session/history queries
+      2. Firestore — Google-native audit trail (if GOOGLE_CLOUD_PROJECT is set)
 
-        col = AsyncIOMotorClient(settings.MONGO_URI)[settings.MONGO_DB][COLL_TRACES]
-        await col.insert_one(trace.to_mongo())
-        log.info("trace_persisted", trace_id=trace.trace_id, steps=len(trace.steps))
-    except Exception as exc:
-        log.warning("trace_persist_failed", error=str(exc))
+    Both writes are attempted concurrently; failure of either does not raise.
+    Called from AIDENRunner as an asyncio background task.
+    """
+    import asyncio
+    from src.core.firestore_tracer import persist_trace_firestore
+
+    async def _mongo() -> None:
+        try:
+            from motor.motor_asyncio import AsyncIOMotorClient
+            from src.core.config import settings
+
+            col = AsyncIOMotorClient(settings.MONGO_URI)[settings.MONGO_DB][COLL_TRACES]
+            await col.insert_one(trace.to_mongo())
+            log.info("trace_persisted_mongo", trace_id=trace.trace_id, steps=len(trace.steps))
+        except Exception as exc:
+            log.warning("trace_persist_mongo_failed", error=str(exc))
+
+    async def _firestore() -> None:
+        await persist_trace_firestore(trace)
+
+    # Run both writes concurrently — neither blocks the other
+    await asyncio.gather(_mongo(), _firestore(), return_exceptions=True)

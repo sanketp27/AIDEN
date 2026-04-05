@@ -1,15 +1,4 @@
-# cloudbuild.yaml — AIDEN automated CI/CD to Cloud Run + Vertex AI
-#
-# Usage:
-#   gcloud builds submit --config=cloudbuild.yaml \
-#       --substitutions=_PROJECT_ID=your-project-id
-#
-# Or trigger automatically via Cloud Build GitHub trigger.
-#
-# Required APIs (enable once):
-#   gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
-#     cloudbuild.googleapis.com aiplatform.googleapis.com secretmanager.googleapis.com
-
+# cloudbuild.yaml — AIDEN v5 CI/CD to Cloud Run + Vertex AI
 substitutions:
   _PROJECT_ID: "${PROJECT_ID}"
   _REGION: "us-central1"
@@ -31,10 +20,7 @@ steps:
   - id: push
     name: "gcr.io/cloud-builders/docker"
     waitFor: [build]
-    args:
-      - push
-      - "--all-tags"
-      - "${_IMAGE}"
+    args: [push, "--all-tags", "${_IMAGE}"]
 
   - id: deploy
     name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -54,13 +40,14 @@ steps:
       - "--concurrency=80"
       - "--min-instances=0"
       - "--max-instances=10"
-
+      # Secrets
       - "--set-secrets=MONGO_URI=AIDEN_MONGO_URI:latest"
       - "--set-secrets=GEMINI_API_KEY=AIDEN_GEMINI_API_KEY:latest"
       - "--set-secrets=JWT_SECRET=AIDEN_JWT_SECRET:latest"
       - "--set-secrets=GMAIL_CLIENT_ID=AIDEN_GOOGLE_CLIENT_ID:latest"
       - "--set-secrets=GMAIL_CLIENT_SECRET=AIDEN_GOOGLE_CLIENT_SECRET:latest"
-
+      - "--set-secrets=NOTION_TOKEN=AIDEN_NOTION_TOKEN:latest"
+      # Env vars
       - "--set-env-vars=GOOGLE_CLOUD_PROJECT=${_PROJECT_ID}"
       - "--set-env-vars=GOOGLE_CLOUD_LOCATION=${_REGION}"
       - "--set-env-vars=GOOGLE_GENAI_USE_VERTEXAI=1"
@@ -68,6 +55,15 @@ steps:
       - "--set-env-vars=DEBUG=false"
       - "--set-env-vars=MONGO_DB=aiden"
       - "--set-env-vars=CHROMA_PATH=/tmp/chroma"
+      # MCP config (v3.0)
+      - "--set-env-vars=WORKSPACE_MCP_PORT=8001"
+      - "--set-env-vars=MONGO_MCP_PORT=8002"
+      - "--set-env-vars=NOTION_MCP_PORT=8003"
+      - "--set-env-vars=GITHUB_MCP_PORT=8004"
+      - "--set-env-vars=WORKSPACE_MCP_ENABLED=true"
+      - "--set-env-vars=MONGO_MCP_ENABLED=true"
+      - "--set-env-vars=NOTION_MCP_ENABLED=true"
+      - "--set-env-vars=GITHUB_MCP_ENABLED=false"
 
   - id: print-url
     name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -78,12 +74,12 @@ steps:
       - |
         URL=$(gcloud run services describe ${_SERVICE} \
           --region=${_REGION} --format='value(status.url)')
-        echo "========================================"
-        echo " AIDEN deployed successfully!"
-        echo " Live URL: $${URL}"
-        echo " Health:   $${URL}/health"
-        echo " API docs: $${URL}/docs"
-        echo "========================================"
+        echo "============================================"
+        echo " AIDEN v3.0 deployed!"
+        echo " URL:    $${URL}"
+        echo " Health: $${URL}/health"
+        echo " Docs:   $${URL}/docs"
+        echo "============================================"
 
 images:
   - "${_IMAGE}:${COMMIT_SHA}"

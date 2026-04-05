@@ -1,17 +1,17 @@
 [project]
 name = "aiden"
-version = "2.0.0"
-description = "AI Intelligent Daily Executive Navigator - Multi-agent productivity system"
+version = "3.0.0"
+description = "AI Intelligent Daily Executive Navigator — 6 agents + 4 MCP servers"
 requires-python = ">=3.11"
 dependencies = [
     # Agentic framework
     "google-adk>=1.0.0",
-    "google-genai>=1.0.0",  # For Gemini Live API
+    "google-genai>=1.0.0",
     "google-generativeai>=0.8.0",
 
-    # Voice (placeholder - commented out until user has GCP credentials)
-    # "google-cloud-speech>=2.26.0",
-    # "google-cloud-texttospeech>=2.17.0",
+    # MCP — Google Workspace (Calendar, Gmail, Drive, Docs)
+    "google-workspace-mcp>=0.1.0",
+    "fastmcp>=0.1.0",
 
     # Vision / Image
     "Pillow>=10.3.0",
@@ -21,10 +21,11 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "python-jose[cryptography]>=3.3.0",
     "passlib[argon2]>=1.7.4",
-    "python-multipart>=0.0.6",  # For file uploads
+    "python-multipart>=0.0.6",
     "slowapi>=0.1.9",
     "websockets>=13.0",
     "httpx>=0.27.0",
+    "cryptography>=42.0.0",
 
     # Data layer
     "motor>=3.5.0",
@@ -40,7 +41,7 @@ dependencies = [
     # Models + cache
     "pydantic>=2.7.0",
     "pydantic-settings>=2.3.0",
-    "email-validator>=2.0.0",  # For EmailStr validation
+    "email-validator>=2.0.0",
     "cachetools>=5.3.0",
 
     # Observability
@@ -54,7 +55,7 @@ dependencies = [
     "tenacity>=8.3.0",
     "python-dotenv>=1.0.0",
 
-    # Telegram Bot integration
+    # Telegram Bot
     "python-telegram-bot[all]>=21.0",
 ]
 
@@ -64,7 +65,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.12.0",
-    "httpx>=0.27.0",        # for FastAPI TestClient async support
+    "httpx>=0.27.0",
     "black>=24.0.0",
     "ruff>=0.3.0",
     "mypy>=1.9.0",

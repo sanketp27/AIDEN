@@ -1,55 +1,44 @@
 """
-AIDEN Runner — ADK execution engine with full trace emission
-============================================================
-Every ADK event is parsed by TraceCollector into structured TraceStep
-objects that are yielded immediately over SSE so the UI can animate
-the agent routing in real-time.
+AIDEN Runner v3.0 — ADK execution engine with full trace emission
+=================================================================
+Upgraded from v2: supports per-user async orchestrator with MCP tools.
 
-Streaming protocol (Server-Sent Events)
-----------------------------------------
-Each SSE data line is a JSON object with a `type` field:
-
-  {"type": "trace_step",  "step": <TraceStep.to_dict()>}
-  {"type": "agent_active","agent": "TaskMaster", "color": "amber"}
-  {"type": "done",        "response": "...", "session_id": "...",
-                          "trace": <AgentTrace.to_dict()>}
-  {"type": "error",       "detail": "...", "session_id": "..."}
+run_with_trace()  — SSE streaming (chat router)
+run_agent()       — non-streaming (voice / vision routers)
+build_runner()    — async factory that creates a per-session Runner with MCP
 """
 from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import AsyncIterator
+from typing import AsyncIterator, Any
 
 import structlog
 from google.adk.runners import Runner
 from google.genai.types import Content, Part
 
-from src.agents.orchestrator import aiden_core
+from src.agents.orchestrator import aiden_core, build_orchestrator
 from src.core.config import settings
 from src.core.session import session_service
 from src.core.tracer import AgentTrace, TraceCollector, persist_trace
 
 log = structlog.get_logger()
-
 APP_NAME = "aiden"
 
 
 class AIDENRunner:
     """
-    Wraps Google ADK Runner with full trace capture and SSE streaming.
+    Wraps ADK Runner with full trace capture and SSE streaming.
 
-    Key design decisions
-    --------------------
-    - run_with_trace()  yields SSE-ready dicts for the chat router.
-    - run_agent()       is the legacy non-streaming path (kept for
-                        compatibility with voice / vision routers).
-    - TraceCollector is created fresh per request — no shared state.
+    v3.0 upgrade: supports per-user orchestrator (with MCP tools).
+    The default self.runner uses the sync aiden_core for backwards compat.
+    Use build_runner(user) for MCP-enabled sessions.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, agent: Any = None) -> None:
+        _agent = agent if agent is not None else aiden_core
         self.runner = Runner(
-            agent=aiden_core,
+            agent=_agent,
             app_name=APP_NAME,
             session_service=session_service,
         )
@@ -74,16 +63,7 @@ class AIDENRunner:
         message: str,
         session_id: str | None = None,
     ) -> AsyncIterator[dict]:
-        """
-        Execute the orchestrator and emit SSE-ready dicts.
-
-        Yields
-        ------
-        {"type": "trace_step",   "step": {...}}
-        {"type": "agent_active", "agent": str, "color": str}
-        {"type": "done",         "response": str, "session_id": str, "trace": {...}}
-        {"type": "error",        "detail": str,   "session_id": str}
-        """
+        """Execute orchestrator and emit SSE-ready dicts."""
         if not session_id:
             session_id = str(uuid.uuid4())
 
@@ -100,7 +80,7 @@ class AIDENRunner:
             await self._ensure_session(user_id, session_id)
             user_message = Content(role="user", parts=[Part(text=message)])
 
-            response_text  = ""
+            response_text    = ""
             last_agent_label = ""
 
             async for event in self.runner.run_async(
@@ -108,13 +88,10 @@ class AIDENRunner:
                 session_id=session_id,
                 new_message=user_message,
             ):
-
                 steps = collector.process_event(event)
 
                 for step in steps:
                     yield {"type": "trace_step", "step": step.to_dict()}
-
-                    # Notify UI which agent is currently active
                     if step.agent_label != last_agent_label:
                         last_agent_label = step.agent_label
                         yield {
@@ -131,15 +108,11 @@ class AIDENRunner:
                             response_text += txt
 
             trace: AgentTrace = collector.finalise(response_text, success=True)
-
             asyncio.create_task(persist_trace(trace))
-
-            run_log.info(
-                "run_with_trace_complete",
-                agents=trace.agents_involved,
-                steps=len(trace.steps),
-                duration_ms=trace.total_duration_ms,
-            )
+            run_log.info("run_with_trace_complete",
+                         agents=trace.agents_involved,
+                         steps=len(trace.steps),
+                         duration_ms=trace.total_duration_ms)
 
             yield {
                 "type":       "done",
@@ -164,10 +137,7 @@ class AIDENRunner:
         message: str,
         session_id: str | None = None,
     ) -> dict:
-        """
-        Non-streaming execution — used by voice / vision routers.
-        Returns the final response dict including the full trace.
-        """
+        """Non-streaming execution for voice / vision routers."""
         if not session_id:
             session_id = str(uuid.uuid4())
 
@@ -183,7 +153,6 @@ class AIDENRunner:
         try:
             await self._ensure_session(user_id, session_id)
             user_message = Content(role="user", parts=[Part(text=message)])
-
             response_text = ""
 
             async for event in self.runner.run_async(
@@ -192,7 +161,6 @@ class AIDENRunner:
                 new_message=user_message,
             ):
                 collector.process_event(event)
-
                 if event.is_final_response() and event.content:
                     for part in event.content.parts:
                         txt = getattr(part, "text", None)
@@ -201,13 +169,9 @@ class AIDENRunner:
 
             trace = collector.finalise(response_text, success=True)
             asyncio.create_task(persist_trace(trace))
-
-            run_log.info(
-                "run_agent_complete",
-                agents=trace.agents_involved,
-                duration_ms=trace.total_duration_ms,
-            )
-
+            run_log.info("run_agent_complete",
+                         agents=trace.agents_involved,
+                         duration_ms=trace.total_duration_ms)
             return {
                 "response":    response_text,
                 "session_id":  session_id,
@@ -226,7 +190,22 @@ class AIDENRunner:
             }
 
 
+# ── Default singleton (sync fallback — backwards compat) ──────────────────────
 aiden_runner = AIDENRunner()
+
+
+async def build_runner(user: Any) -> AIDENRunner:
+    """
+    Build a per-session AIDENRunner with the full MCP-enabled orchestrator.
+    Use this in the chat router for sessions that need MCP tools.
+
+    Example (chat.py):
+        runner = await build_runner(current_user)
+        async for event in runner.run_with_trace(user_id, message, session_id):
+            yield event
+    """
+    agent = await build_orchestrator(user=user)
+    return AIDENRunner(agent=agent)
 
 
 async def run_agent(
