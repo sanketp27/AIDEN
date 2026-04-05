@@ -1,3 +1,7 @@
+"""
+Task repository — MongoDB CRUD for tasks and recurring task templates.
+Per-user collection namespacing ensures data isolation.
+"""
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ASCENDING, DESCENDING
 from src.core.config import settings
@@ -17,6 +21,7 @@ class TaskRepository:
         self.client = AsyncIOMotorClient(settings.MONGO_URI)
         self.db = self.client[settings.MONGO_DB]
 
+
     def _tasks(self, user_id: str):
         return self.db[f"{user_id}__tasks"]
 
@@ -29,8 +34,6 @@ class TaskRepository:
         await col.create_index([("user_id", ASCENDING), ("priority", ASCENDING)], background=True)
         await col.create_index([("tags", ASCENDING)], background=True)
         await col.create_index([("recurring_id", ASCENDING)], background=True)
-
-    # ── One-off task CRUD ───────────────────────────────────────────────────
 
     async def create_task(self, task: Task) -> dict:
         col = self._tasks(task.user_id)
@@ -259,16 +262,23 @@ class TaskRepository:
         async for doc in cursor:
             doc.pop("_id", None)
             history = doc.get("completion_history", [])
-            # Normalise start_date — MongoDB may return a datetime object or an ISO string
+
+            # start_date may be a datetime object (BSON) or ISO string — handle both
             raw_start = doc.get("start_date")
-            if raw_start is None:
-                start_date_str = today.isoformat()
-            elif hasattr(raw_start, "date"):          # datetime.datetime object
-                start_date_str = raw_start.date().isoformat()
+            if raw_start:
+                if hasattr(raw_start, "date"):        # datetime.datetime from MongoDB
+                    start_str = raw_start.date().isoformat()
+                elif hasattr(raw_start, "isoformat"):  # datetime.date
+                    start_str = raw_start.isoformat()
+                else:
+                    start_str = str(raw_start)[:10]
+                try:
+                    expected = min(30, (today - date.fromisoformat(start_str)).days + 1)
+                except (ValueError, TypeError):
+                    expected = 30
             else:
-                start_date_str = str(raw_start)[:10]  # ISO string — take YYYY-MM-DD part
-            # 30-day completion rate
-            expected = min(30, (today - date.fromisoformat(start_date_str)).days + 1) if doc.get("start_date") else 30
+                expected = 30
+
             completed_in_30 = sum(1 for d in history if d >= thirty_days_ago)
             rate = round(completed_in_30 / max(expected, 1), 2)
             doc["completion_rate_30d"] = min(rate, 1.0)

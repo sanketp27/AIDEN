@@ -134,15 +134,62 @@ async def login(body: LoginRequest) -> TokenOut:
     )
 
 
+_GUEST_EMAIL    = "guest@aiden.demo"
+_GUEST_PASSWORD = "AIden@Guest2025"
+_GUEST_NAME     = "Evaluator (Guest)"
+
+
+@router.post("/guest", response_model=TokenOut)
+async def guest_login() -> TokenOut:
+    """
+    Zero-friction guest login for evaluators / demo viewers.
+
+    • Creates the guest account on first call if it does not exist.
+    • Returns a standard JWT valid for the same TTL as regular accounts.
+    • The guest role is 'guest' — the UI can use this to show an optional
+      banner indicating the session is a read-only demo.
+    • No email or password required from the client.
+    """
+    # Try to authenticate with the fixed guest credentials
+    user = await user_repo.authenticate(_GUEST_EMAIL, _GUEST_PASSWORD)
+
+    if not user:
+        # First boot — create the guest account
+        try:
+            guest_data = UserCreate(
+                email=_GUEST_EMAIL,
+                name=_GUEST_NAME,
+                password=_GUEST_PASSWORD,
+                role=UserRole.GUEST,
+            )
+            user = await user_repo.create(guest_data)
+            log.info("guest_account_created")
+        except ValueError:
+            # Race condition: account was just created by another request
+            user = await user_repo.authenticate(_GUEST_EMAIL, _GUEST_PASSWORD)
+            if not user:
+                from fastapi import HTTPException
+                raise HTTPException(500, "Failed to initialise guest account.")
+
+    token, expires_in = await user_repo.get_or_create_token(user)
+    log.info("guest_login", user_id=user.user_id)
+
+    return TokenOut(
+        access_token=token,
+        expires_in=expires_in,
+        user_id=user.user_id,
+        email=user.email,
+        name=user.name,
+        role=user.role.value,
+    )
+
+
 @router.post("/logout")
 async def logout(current_user: UserClaims = Depends(get_current_active_user)) -> dict:
     """Revoke all active tokens for the current user."""
     revoked = await user_repo.revoke_all_tokens(current_user.user_id)
     log.info("user_logged_out", user_id=current_user.user_id, tokens_revoked=revoked)
     return {"status": "logged_out", "tokens_revoked": revoked}
-
-
-# ── Current user info ─────────────────────────────────────────────────────────
 
 @router.get("/me")
 async def get_me(current_user: UserClaims = Depends(get_current_active_user)) -> dict:

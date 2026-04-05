@@ -13,6 +13,7 @@ class UserRole(str, Enum):
     EXECUTIVE = "executive"  # C-suite, senior managers
     USER = "user"           # Standard knowledge workers
     DEVELOPER = "developer"  # API/webhook access
+    GUEST = "guest"         # Read-only evaluator / demo access
 
 
 class UserClaims(BaseModel):
