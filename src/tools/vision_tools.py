@@ -2,15 +2,21 @@
 Vision tools for ADK agents
 Gemini Vision API for image classification and structured extraction
 """
-from src.tools.tool_decorator import tool
-import google.generativeai as genai
-from src.core.config import settings
-from PIL import Image
+from __future__ import annotations
+
 import asyncio
 import base64
 import io
 import json
+from typing import Any
+
+import cairosvg
+import google.generativeai as genai
 import structlog
+from PIL import Image, UnidentifiedImageError
+
+from src.core.config import settings
+from src.tools.tool_decorator import tool
 
 log = structlog.get_logger()
 
@@ -19,15 +25,86 @@ genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # Image type definitions
 IMAGE_TYPES = [
-    'whiteboard',
-    'handwritten',
-    'document',
-    'screenshot',
-    'business_card',
-    'slide',
-    'receipt',
-    'photo'
+    "whiteboard",
+    "handwritten",
+    "document",
+    "screenshot",
+    "business_card",
+    "slide",
+    "receipt",
+    "photo",
 ]
+
+
+def _decode_image_input(image_b64: str) -> tuple[bytes, str]:
+    """
+    Decode base64 image input.
+
+    Supports plain base64 and data URLs (e.g. data:image/svg+xml;base64,...).
+    Returns (bytes, mime_type).
+    """
+    mime_type = ""
+    payload = image_b64.strip()
+
+    if payload.startswith("data:") and "," in payload:
+        header, payload = payload.split(",", 1)
+        mime_type = header[5:].split(";", 1)[0].lower()
+
+    image_bytes = base64.b64decode(payload)
+    return image_bytes, mime_type
+
+
+def is_svg(file_bytes: bytes, mime_type: str = "", filename: str = "") -> bool:
+    """
+    Detect SVG by MIME type, filename extension, or content signature.
+    """
+    if mime_type.lower() == "image/svg+xml":
+        return True
+
+    if filename.lower().endswith(".svg"):
+        return True
+
+    header = file_bytes[:300].decode(errors="ignore").lower().lstrip()
+    return "<svg" in header or header.startswith("<?xml") and "<svg" in header
+
+
+def load_image(file_bytes: bytes, mime_type: str = "", filename: str = "") -> Image.Image:
+    """
+    Load raster images directly, convert SVG to PNG in-memory before PIL handling.
+    """
+    try:
+        if is_svg(file_bytes, mime_type=mime_type, filename=filename):
+            png_bytes = cairosvg.svg2png(bytestring=file_bytes)
+            return Image.open(io.BytesIO(png_bytes)).convert("RGB")
+        return Image.open(io.BytesIO(file_bytes)).convert("RGB")
+    except UnidentifiedImageError as exc:
+        log.error(
+            "image_load_unidentified",
+            mime_type=mime_type,
+            filename=filename,
+            error=str(exc),
+        )
+        raise ValueError(
+            "Unsupported or corrupted image. Supported formats: PNG, JPG, JPEG, SVG."
+        ) from exc
+    except Exception as exc:
+        log.error(
+            "image_load_failed",
+            mime_type=mime_type,
+            filename=filename,
+            error=str(exc),
+            exc_info=True,
+        )
+        raise ValueError("Failed to process uploaded image.") from exc
+
+
+def _parse_json_response(text: str) -> dict[str, Any]:
+    result_text = text.strip()
+    if result_text.startswith("```"):
+        result_text = result_text.split("\n", 1)[1].rsplit("\n", 1)[0]
+        if result_text.startswith("json"):
+            result_text = result_text[4:].strip()
+    return json.loads(result_text)
 
 
 @tool
@@ -54,9 +131,8 @@ async def classify_image(image_b64: str) -> dict:
     try:
         model = genai.GenerativeModel(settings.VISION_MODEL)
 
-        # Decode image
-        image_bytes = base64.b64decode(image_b64)
-        image = Image.open(io.BytesIO(image_bytes))
+        image_bytes, mime_type = _decode_image_input(image_b64)
+        image = load_image(image_bytes, mime_type=mime_type)
 
         prompt = f"""Classify this image into exactly one of these types: {', '.join(IMAGE_TYPES)}
 
@@ -67,32 +143,29 @@ Respond ONLY with valid JSON (no markdown):
   "description": "<one sentence describing the image>"
 }}"""
 
-        # Fix Bug #3: generate_content is synchronous — run in a thread to avoid blocking the event loop
         response = await asyncio.to_thread(model.generate_content, [prompt, image])
+        result = _parse_json_response(response.text)
 
-        # Parse JSON response
-        result_text = response.text.strip()
-        # Remove markdown code blocks if present
-        if result_text.startswith('```'):
-            result_text = result_text.split('\n', 1)[1].rsplit('\n', 1)[0]
-            if result_text.startswith('json'):
-                result_text = result_text[4:].strip()
-
-        result = json.loads(result_text)
-
-        log.info("image_classified",
-                image_type=result['type'],
-                confidence=result['confidence'])
-
+        log.info(
+            "image_classified", image_type=result["type"], confidence=result["confidence"]
+        )
         return result
 
-    except Exception as e:
-        log.error("image_classification_failed", error=str(e))
+    except ValueError as exc:
+        log.warning("image_classification_validation_failed", error=str(exc))
+        return {
+            "type": "photo",
+            "confidence": 0.0,
+            "description": "Image format not supported or file is corrupted.",
+            "error": str(exc),
+        }
+    except Exception as exc:
+        log.error("image_classification_failed", error=str(exc), exc_info=True)
         return {
             "type": "photo",
             "confidence": 0.5,
             "description": "Classification failed, defaulting to photo",
-            "error": str(e)
+            "error": str(exc),
         }
 
 
@@ -120,13 +193,11 @@ async def analyze_image(image_b64: str, image_type: str) -> dict:
     try:
         model = genai.GenerativeModel(settings.VISION_MODEL)
 
-        # Decode image
-        image_bytes = base64.b64decode(image_b64)
-        image = Image.open(io.BytesIO(image_bytes))
+        image_bytes, mime_type = _decode_image_input(image_b64)
+        image = load_image(image_bytes, mime_type=mime_type)
 
-        # Type-specific prompts
         prompts = {
-            'whiteboard': """Extract from this whiteboard image:
+            "whiteboard": """Extract from this whiteboard image:
 1. All visible text (preserve structure and layout)
 2. Action items (lines with checkboxes, arrows, or action verbs like "Review", "Send", "Complete")
 3. Dates or deadlines mentioned (any format)
@@ -141,8 +212,7 @@ Respond as valid JSON:
   "people": ["<list of names>"],
   "diagrams": "<description of any diagrams/visuals>"
 }""",
-
-            'handwritten': """Extract from this handwritten content:
+            "handwritten": """Extract from this handwritten content:
 1. All handwritten text (interpret handwriting accurately)
 2. To-do items (checkboxes, dashes, bullets, numbers)
 3. Priority indicators (!, *, underlining, highlighting = high priority)
@@ -156,8 +226,7 @@ Respond as valid JSON:
   "notes": ["<any non-task notes>"],
   "dates": ["<dates found>"]
 }""",
-
-            'document': """Extract from this document:
+            "document": """Extract from this document:
 1. Document title and any headings
 2. Full text content (preserve paragraph structure)
 3. Any tables (as structured data)
@@ -174,8 +243,7 @@ Respond as valid JSON:
   "deadlines": ["<list of dates>"],
   "keywords": ["<5-10 key topics>"]
 }""",
-
-            'screenshot': """Extract from this screenshot:
+            "screenshot": """Extract from this screenshot:
 1. All visible text
 2. UI elements and their labels
 3. Any error messages or warnings
@@ -190,8 +258,7 @@ Respond as valid JSON:
   "code": "<code snippets if any>",
   "application": "<app/window title>"
 }""",
-
-            'business_card': """Extract contact information from this business card:
+            "business_card": """Extract contact information from this business card:
 
 Respond as valid JSON:
 {
@@ -203,8 +270,7 @@ Respond as valid JSON:
   "website": "<website URL>",
   "address": "<physical address if shown>"
 }""",
-
-            'slide': """Extract from this presentation slide:
+            "slide": """Extract from this presentation slide:
 1. Slide title
 2. All bullet points and sub-points
 3. Any data, numbers, or statistics
@@ -219,8 +285,7 @@ Respond as valid JSON:
   "charts": "<description of any charts>",
   "footer": "<footer text>"
 }""",
-
-            'receipt': """Extract from this receipt/invoice:
+            "receipt": """Extract from this receipt/invoice:
 
 Respond as valid JSON:
 {
@@ -232,8 +297,7 @@ Respond as valid JSON:
   "payment_method": "<cash/card/etc>",
   "line_items": [{"item": "<name>", "quantity": 1, "price": "<amount>"}]
 }""",
-
-            'photo': """Describe this photo in detail:
+            "photo": """Describe this photo in detail:
 1. Main subjects or objects
 2. Setting or location
 3. Any text visible
@@ -245,102 +309,27 @@ Respond as valid JSON:
   "subjects": ["<list of main subjects>"],
   "text": "<any visible text>",
   "location": "<setting if identifiable>"
-}"""
+}""",
         }
 
-        prompt = prompts.get(image_type, prompts['photo'])
-
-        # Fix Bug #3: generate_content is synchronous — run in a thread to avoid blocking the event loop
+        prompt = prompts.get(image_type, prompts["photo"])
         response = await asyncio.to_thread(model.generate_content, [prompt, image])
+        result = _parse_json_response(response.text)
 
-        # Parse JSON response
-        result_text = response.text.strip()
-        # Remove markdown code blocks
-        if result_text.startswith('```'):
-            result_text = result_text.split('\n', 1)[1].rsplit('\n', 1)[0]
-            if result_text.startswith('json'):
-                result_text = result_text[4:].strip()
-
-        result = json.loads(result_text)
-
-        log.info("image_analyzed",
-                image_type=image_type,
-                fields=list(result.keys()))
-
+        log.info("image_analyzed", image_type=image_type, fields=list(result.keys()))
         return result
 
-    except Exception as e:
-        log.error("image_analysis_failed", error=str(e))
+    except ValueError as exc:
+        log.warning("image_analysis_validation_failed", error=str(exc))
         return {
-            "error": str(e),
+            "error": str(exc),
             "text": "Analysis failed",
-            "message": "Could not extract structured data from image"
+            "message": "Unsupported or corrupted image. Supported formats: PNG, JPG, JPEG, SVG.",
         }
-
-
-@tool
-async def extract_tasks_from_image(image_b64: str) -> dict:
-    """
-    Extract action items and tasks from any image type.
-
-    This is a specialized tool that focuses on finding tasks/to-dos
-    regardless of image type.
-
-    Args:
-        image_b64: Base64-encoded image
-
-    Returns:
-        List of tasks ready for TaskMaster
-    """
-    try:
-        # First classify
-        classification = await classify_image(image_b64)
-        image_type = classification['type']
-
-        # Then analyze
-        analysis = await analyze_image(image_b64, image_type)
-
-        # Extract tasks based on type
-        tasks = []
-
-        # Get action items (different field names by type)
-        action_items = analysis.get('action_items', [])
-        task_items = analysis.get('tasks', [])
-
-        for item in action_items:
-            tasks.append({
-                'title': item.get('task') or item.get('item', 'Untitled task'),
-                'priority': 'P2',  # Default medium priority
-                'due_date': item.get('due_date') or item.get('deadline'),
-                'description': f'Extracted from {image_type} image',
-                'tags': [image_type, 'from-image']
-            })
-
-        for item in task_items:
-            tasks.append({
-                'title': item.get('title', 'Untitled task'),
-                'priority': item.get('priority', 'P2'),
-                'due_date': item.get('due_date'),
-                'description': f'Extracted from {image_type} image',
-                'tags': [image_type, 'from-image']
-            })
-
-        log.info("tasks_extracted_from_image",
-                image_type=image_type,
-                task_count=len(tasks))
-
+    except Exception as exc:
+        log.error("image_analysis_failed", error=str(exc), exc_info=True)
         return {
-            'image_type': image_type,
-            'tasks': tasks,
-            'count': len(tasks),
-            'message': f'Extracted {len(tasks)} task(s) from {image_type} image'
-        }
-
-    except Exception as e:
-        log.error("task_extraction_failed", error=str(e))
-        return {
-            'tasks': [],
-            'count': 0,
-            'error': str(e),
-            'message': 'Failed to extract tasks from image'
+            "error": str(exc),
+            "text": "Analysis failed",
+            "message": "Could not extract structured data from image",
         }

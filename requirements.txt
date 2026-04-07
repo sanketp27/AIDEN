@@ -1,0 +1,2 @@
+# Runtime package pin for environments installing from requirements.txt
+cairosvg>=2.7.1

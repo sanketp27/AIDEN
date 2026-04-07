@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from src.api.middleware import get_current_active_user
 from src.core.config import settings
-from src.core.runner import aiden_runner, run_agent
+from src.core.runner import get_runner, run_agent
 from src.core.tracer import COLL_TRACES
 from src.models.user import UserClaims
 
@@ -61,7 +61,8 @@ async def _chat_event_stream(
     The generator monitors `http_request.is_disconnected()` so it stops
     producing events if the browser tab is closed mid-stream.
     """
-    async for payload in aiden_runner.run_with_trace(
+    runner = get_runner()
+    async for payload in runner.run_with_trace(
         user_id=user.user_id,
         message=request.message,
         session_id=request.session_id,
@@ -181,7 +182,8 @@ async def _upload_event_stream(
                     "detail": f"File too large. Max size is {MAX_FILE_SIZE_MB} MB."})
         return
 
-    async for payload in aiden_runner.run_with_trace_multimodal(
+    runner = get_runner()
+    async for payload in runner.run_with_trace_multimodal(
         user_id    = user.user_id,
         message    = message or "",
         file_bytes = file_bytes,
@@ -253,7 +255,7 @@ async def chat_upload_sync(
              filename=file.filename,
              content_type=file.content_type)
 
-    return await aiden_runner.run_agent_multimodal(
+    return await get_runner().run_agent_multimodal(
         user_id    = current_user.user_id,
         message    = message or "",
         file_bytes = file_bytes,
