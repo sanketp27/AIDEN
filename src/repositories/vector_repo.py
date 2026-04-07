@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 import asyncio
-import structlog
-from typing import Optional
+import os
+import time
+from typing import Any, Optional
 
 import chromadb
-import google.generativeai as genai
+import structlog
+from google import genai
 
 from src.core.config import settings
 
 log = structlog.get_logger()
 
+EMBEDDING_MODEL = "text-embedding-004"
+_MAX_EMBED_RETRIES = 3
+_RETRY_BASE_DELAY_SECONDS = 0.5
+
 _chroma_client: chromadb.PersistentClient | None = None
+_genai_client: genai.Client | None = None
 
 
 def _get_client() -> chromadb.PersistentClient:
@@ -21,56 +28,117 @@ def _get_client() -> chromadb.PersistentClient:
         log.info("chroma_client_initialised", path=settings.CHROMA_PATH)
     return _chroma_client
 
-def _configure_genai() -> None:
-    """Configure google-generativeai SDK with the API key (idempotent)."""
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+
+def _get_google_api_key() -> str:
+    """Resolve the only supported embedding API key source."""
+    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("Missing GOOGLE_API_KEY environment variable")
+    return api_key
+
+
+def _get_genai_client() -> genai.Client:
+    global _genai_client
+    if _genai_client is None:
+        _genai_client = genai.Client(api_key=_get_google_api_key())
+        log.info("genai_client_initialised", model=EMBEDDING_MODEL)
+    return _genai_client
+
+
+def _validate_text(value: str, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    text = value.strip()
+    if not text:
+        raise ValueError(f"{field_name} must not be empty")
+    return text
+
+
+def _extract_embeddings(response: Any) -> list[list[float]]:
+    embeddings = getattr(response, "embeddings", None)
+    if not embeddings:
+        raise RuntimeError("Embedding response did not include embeddings")
+
+    vectors: list[list[float]] = []
+    for embedding in embeddings:
+        values = getattr(embedding, "values", None)
+        if not values:
+            raise RuntimeError("Embedding response did not include vector values")
+        vectors.append([float(v) for v in values])
+    return vectors
+
+
+def _embed_with_retry(contents: list[str], task_type: str) -> list[list[float]]:
+    client = _get_genai_client()
+
+    for attempt in range(1, _MAX_EMBED_RETRIES + 1):
+        try:
+            response = client.models.embed_content(
+                model=EMBEDDING_MODEL,
+                contents=contents,
+                config={"task_type": task_type},
+            )
+            return _extract_embeddings(response)
+        except Exception as exc:
+            is_last_attempt = attempt == _MAX_EMBED_RETRIES
+            log.warning(
+                "embedding_request_failed",
+                attempt=attempt,
+                max_attempts=_MAX_EMBED_RETRIES,
+                task_type=task_type,
+                error=str(exc),
+                will_retry=not is_last_attempt,
+            )
+            if is_last_attempt:
+                log.error(
+                    "embedding_request_exhausted_retries",
+                    task_type=task_type,
+                    error=str(exc),
+                    exc_info=True,
+                )
+                raise
+            time.sleep(_RETRY_BASE_DELAY_SECONDS * attempt)
+
+    raise RuntimeError("Unreachable embedding retry state")
 
 
 async def _embed_documents(texts: list[str]) -> list[list[float]]:
     """
-    Embed one or more document texts using Gemini text-embedding-004.
+    Embed one or more document texts using Google GenAI text-embedding-004.
     Uses RETRIEVAL_DOCUMENT task_type for best indexing recall.
-    Returns a list of 768-dimensional float vectors.
+    Returns a list of float vectors.
     """
-    def _sync() -> list[list[float]]:
-        _configure_genai()
-        result = genai.embed_content(
-            model     = "models/text-embedding-004",
-            content   = texts,
-            task_type = "RETRIEVAL_DOCUMENT",
-        )
-        emb = result["embedding"]
-        if emb and isinstance(emb[0], float):
-            return [emb]
-        return list(emb)
+    validated = [_validate_text(text, "document text") for text in texts]
 
-    return await asyncio.get_event_loop().run_in_executor(None, _sync)
+    def _sync() -> list[list[float]]:
+        return _embed_with_retry(validated, task_type="RETRIEVAL_DOCUMENT")
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _sync)
 
 
 async def _embed_query(query: str) -> list[float]:
     """
-    Embed a search query using Gemini text-embedding-004.
+    Embed a search query using Google GenAI text-embedding-004.
     Uses RETRIEVAL_QUERY task_type — optimised for search queries.
     """
-    def _sync() -> list[float]:
-        _configure_genai()
-        result = genai.embed_content(
-            model     = "models/text-embedding-004",
-            content   = query,
-            task_type = "RETRIEVAL_QUERY",
-        )
-        return result["embedding"]
+    validated_query = _validate_text(query, "query")
 
-    return await asyncio.get_event_loop().run_in_executor(None, _sync)
+    def _sync() -> list[float]:
+        [vector] = _embed_with_retry([validated_query], task_type="RETRIEVAL_QUERY")
+        return vector
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _sync)
 
 
 class VectorRepository:
     """
-    ChromaDB repository backed by Google Gemini text-embedding-004.
+    ChromaDB repository backed by Google GenAI text-embedding-004.
 
     Each user gets their own isolated collection (notes_{user_id}).
     embedding_function=None is always passed so ChromaDB never calls
-    its own model — all vectors come from Gemini.
+    its own model — all vectors come from Google GenAI.
     """
 
     def __init__(self) -> None:
@@ -88,44 +156,45 @@ class VectorRepository:
         embedding_function=None tells ChromaDB we supply vectors ourselves.
         """
         return self.client.get_or_create_collection(
-            name               = f"notes_{user_id}",
-            metadata           = {"hnsw:space": "cosine", "user_id": user_id},
-            embedding_function = None,
+            name=f"notes_{user_id}",
+            metadata={"hnsw:space": "cosine", "user_id": user_id},
+            embedding_function=None,
         )
 
     async def add_embedding(
         self,
-        user_id:     str,
+        user_id: str,
         document_id: str,
-        text:        str,
-        metadata:    Optional[dict] = None,
+        text: str,
+        metadata: Optional[dict] = None,
     ) -> None:
-        """Generate a Gemini embedding and upsert into ChromaDB."""
-        vectors = await _embed_documents([text])
-        meta    = {
+        """Generate an embedding and upsert into ChromaDB."""
+        validated_text = _validate_text(text, "text")
+        vectors = await _embed_documents([validated_text])
+        meta = {
             **(metadata or {}),
             "user_id": user_id,
-            "model":   "text-embedding-004",
+            "model": EMBEDDING_MODEL,
         }
         self._collection(user_id).upsert(
-            ids        = [document_id],
-            documents  = [text],
-            embeddings = vectors,
-            metadatas  = [meta],
+            ids=[document_id],
+            documents=[validated_text],
+            embeddings=vectors,
+            metadatas=[meta],
         )
         log.info(
-            "gemini_embedding_stored",
-            doc_id = document_id,
-            dims   = len(vectors[0]),
-            model  = "text-embedding-004",
+            "embedding_stored",
+            doc_id=document_id,
+            dims=len(vectors[0]),
+            model=EMBEDDING_MODEL,
         )
 
     async def update_embedding(
         self,
-        user_id:     str,
+        user_id: str,
         document_id: str,
-        text:        str,
-        metadata:    Optional[dict] = None,
+        text: str,
+        metadata: Optional[dict] = None,
     ) -> None:
         """Update an existing embedding (re-embeds and upserts)."""
         await self.add_embedding(user_id, document_id, text, metadata)
@@ -147,18 +216,18 @@ class VectorRepository:
     async def semantic_search(
         self,
         user_id: str,
-        query:   str,
-        top_k:   int = 5,
+        query: str,
+        top_k: int = 5,
         filter_metadata: Optional[dict] = None,
     ) -> list[dict]:
         """
-        Semantic search using a Gemini RETRIEVAL_QUERY embedding.
+        Semantic search using a Google GenAI RETRIEVAL_QUERY embedding.
 
         Returns up to top_k results sorted by cosine similarity:
             {"document_id": str, "text": str, "metadata": dict, "score": float}
         score is in [0, 1] — 1.0 = perfect match.
         """
-        col       = self._collection(user_id)
+        col = self._collection(user_id)
         doc_count = col.count()
         n_results = min(top_k, doc_count) if doc_count > 0 else 0
 
@@ -173,27 +242,29 @@ class VectorRepository:
         query_vector = await _embed_query(query)
 
         results = col.query(
-            query_embeddings = [query_vector],
-            n_results        = n_results,
-            where            = where,
+            query_embeddings=[query_vector],
+            n_results=n_results,
+            where=where,
         )
 
         formatted: list[dict] = []
         if results["ids"] and results["ids"][0]:
             for i, doc_id in enumerate(results["ids"][0]):
                 distance = results["distances"][0][i] if results.get("distances") else 1.0
-                formatted.append({
-                    "document_id": doc_id,
-                    "text":        results["documents"][0][i] if results.get("documents") else "",
-                    "metadata":    results["metadatas"][0][i]  if results.get("metadatas")  else {},
-                    "score":       round(1.0 - distance, 4),
-                })
+                formatted.append(
+                    {
+                        "document_id": doc_id,
+                        "text": results["documents"][0][i] if results.get("documents") else "",
+                        "metadata": results["metadatas"][0][i] if results.get("metadatas") else {},
+                        "score": round(1.0 - distance, 4),
+                    }
+                )
 
         log.info(
             "semantic_search_done",
-            user_id   = user_id,
-            query_len = len(query),
-            results   = len(formatted),
-            model     = "text-embedding-004",
+            user_id=user_id,
+            query_len=len(query),
+            results=len(formatted),
+            model=EMBEDDING_MODEL,
         )
         return formatted

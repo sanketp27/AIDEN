@@ -66,7 +66,9 @@ class Settings(BaseSettings):
     TASK_AGENT_MODEL:     str = "gemini-2.5-flash"
     CALENDAR_AGENT_MODEL: str = "gemini-2.5-flash"
     NOTES_AGENT_MODEL:    str = "gemini-2.5-flash"
-    VOICE_AGENT_MODEL:    str = "gemini-2.5-flash"
+    VOICE_AGENT_MODEL:    str = "gemini-2.5-flash"           # STT — audio understanding
+    VOICE_TTS_MODEL:      str = "gemini-2.5-flash-preview-tts"  # TTS — audio generation
+    VOICE_LIVE_MODEL:     str = "gemini-3.1-flash-live-preview"  # WebSocket real-time
     VISION_MODEL:         str = "gemini-2.5-flash"
     DEFAULT_MODEL:        str = "gemini-2.5-flash"
 
@@ -80,13 +82,11 @@ class Settings(BaseSettings):
     QUERY_CACHE_TTL:         int = 30
     MAX_CONCURRENT_AGENTS:   int = 5
 
-    # ── MCP Server Ports (v3.0) ────────────────────────────────────────────
     WORKSPACE_MCP_PORT: int = 8001
     MONGO_MCP_PORT:     int = 8002
     NOTION_MCP_PORT:    int = 8003
     GITHUB_MCP_PORT:    int = 8004
 
-    # ── MCP Enable Flags (v3.0) ───────────────────────────────────────────
     WORKSPACE_MCP_ENABLED: bool = True
     MONGO_MCP_ENABLED:     bool = True
     NOTION_MCP_ENABLED:    bool = True

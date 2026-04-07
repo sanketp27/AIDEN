@@ -1,6 +1,11 @@
 """
 Gemini Live API integration for real-time voice
-Bidirectional audio streaming with gemini-2.1-flash-exp
+Bidirectional audio streaming with gemini-3.1-flash-live-preview
+
+Model: gemini-3.1-flash-live-preview
+  - Audio-to-audio, low-latency, real-time dialogue
+  - Supports acoustic nuance detection and multimodal awareness
+  - Released: Mar 26, 2026
 """
 from google import genai
 from src.core.config import settings
@@ -19,7 +24,7 @@ class GeminiLiveSession:
     Manages a Gemini Live API session for real-time voice
     """
 
-    def __init__(self, model: str = "gemini-2.1-flash-exp"):
+    def __init__(self, model: str = "gemini-3.1-flash-live-preview"):
         self.model = model
         self.session = None
         self.config = {

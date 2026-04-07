@@ -1,5 +1,5 @@
 """
-AIDEN v5.0 API — FastAPI application
+AIDEN v3.0 API — FastAPI application
 =====================================
 Added in v3.0:
   - developer_settings router (PATCH/GET /settings/developer)
@@ -16,27 +16,48 @@ from src.api.routers import (
 )
 from src.api.routers.developer_settings import router as dev_settings_router
 from src.core.config import settings
+import logging
 import structlog
 import time
 
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
-    ],
-    wrapper_class=structlog.stdlib.BoundLogger,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
+_LOGGING_CONFIGURED = False
 
-log = structlog.get_logger()
+
+def _configure_logging_once() -> None:
+    global _LOGGING_CONFIGURED
+    if _LOGGING_CONFIGURED:
+        return
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
+
+    structlog.configure(
+        processors=[
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+            structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    _LOGGING_CONFIGURED = True
+
+
+_configure_logging_once()
+log = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
@@ -71,7 +92,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         log.warning("telegram_bot_start_failed", error=str(exc))
 
-    log.info("aiden_api_starting", version="3.0.0", env=settings.ENV)
+    log.info("aiden_api_starting", version="3.1.0", env=settings.ENV)
     yield
 
     from src.core.scheduler import stop_scheduler
@@ -89,9 +110,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AIDEN v3.0 API",
-    description="AI Intelligent Daily Executive Navigator — 6 agents + 4 MCP servers",
-    version="3.0.0",
+    title="AIDEN v3.1 API",
+    description="AI Intelligent Daily Executive Navigator — 6 agents + 4 MCP servers + multimodal file upload",
+    version="3.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -183,7 +204,7 @@ async def health_check():
 
     return {
         "status": "ok",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "environment": settings.ENV,
         "agents": {
             "orchestrator": f"aiden_core ({settings.ORCHESTRATOR_MODEL})",
@@ -210,9 +231,14 @@ async def health_check():
 async def root():
     return {
         "name": "AIDEN v3.0 API",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "docs": "/docs",
         "health": "/health",
+        "new_in_v3.1": [
+            "Multimodal file upload (POST /chat/upload)",
+            "FileProcessor: image/audio/PDF/DOCX/XLSX → Gemini Parts",
+            "Telegram file upload via /chat/upload/sync",
+        ],
         "new_in_v3": [
             "4 MCP servers (Workspace, MongoDB, Notion, GitHub)",
             "NotionAgent sub-agent for team collaboration",
@@ -229,5 +255,5 @@ if __name__ == "__main__":
         host=settings.API_HOST,
         port=settings.API_PORT,
         reload=settings.is_development,
-        workers=settings.API_WORKERS
+        workers=1 if settings.is_development else settings.API_WORKERS
     )

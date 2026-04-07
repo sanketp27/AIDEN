@@ -1,6 +1,6 @@
 [project]
 name = "aiden"
-version = "3.0.0"
+version = "4.0.0"
 description = "AI Intelligent Daily Executive Navigator — 6 agents + 4 MCP servers"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,6 +15,7 @@ dependencies = [
 
     # Vision / Image
     "Pillow>=10.3.0",
+    "cairosvg>=2.7.1",
 
     # API layer
     "fastapi>=0.115.0",
