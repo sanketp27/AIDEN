@@ -177,53 +177,126 @@ async def _ensure_collection(db, name: str, schema: dict | None = None):
                 log.warning("validator_update_failed", collection=name, error=str(e))
 
 
+async def _safe_create_index(collection, keys: list, **kwargs):
+    """
+    create_index wrapper that survives index-migration conflicts:
+      85 IndexOptionsConflict  — same key exists under a different name → drop & recreate
+      86 IndexKeySpecsConflict — same name exists with different options → drop & recreate
+    Any other error is re-raised immediately.
+    """
+    try:
+        await collection.create_index(keys, **kwargs)
+    except Exception as exc:
+        code = getattr(exc, "code", None)
+        if code not in (85, 86):
+            raise
+        target_name = kwargs.get("name")
+        key_set = {k for k, _ in keys}
+        log.warning(
+            "index_conflict_auto_fix",
+            collection=collection.name,
+            code=code,
+            target=target_name,
+            reason=str(exc),
+        )
+        info = await collection.index_information()
+        for idx_name, idx_info in info.items():
+            if idx_name == "_id_":
+                continue
+            idx_keys = {k for k, _ in idx_info.get("key", [])}
+            if idx_keys == key_set or idx_name == target_name:
+                try:
+                    await collection.drop_index(idx_name)
+                    log.info("stale_index_dropped", collection=collection.name, index=idx_name)
+                except Exception:
+                    pass
+        await collection.create_index(keys, **kwargs)
+        log.info("index_created_after_fix", collection=collection.name, name=target_name)
+
+
 async def _ensure_global_indexes(db):
     """Create indexes on global (non-per-user) collections."""
 
     sessions = db[COLL_SESSIONS]
-    await sessions.create_index(
+    await _safe_create_index(
+        sessions,
         [("session_id", ASCENDING), ("app_name", ASCENDING), ("user_id", ASCENDING)],
-        unique=True, background=True, name="idx_session_lookup"
+        unique=True, background=True, name="idx_session_lookup",
     )
-    await sessions.create_index([("user_id", ASCENDING), ("last_update_time", DESCENDING)],
-                                background=True, name="idx_session_user_time")
+    await _safe_create_index(
+        sessions,
+        [("user_id", ASCENDING), ("last_update_time", DESCENDING)],
+        background=True, name="idx_session_user_time",
+    )
 
     users = db[COLL_USERS]
-    await users.create_index([("user_id", ASCENDING)], unique=True, background=True)
-    # email is optional (Telegram-only users may not have one); sparse=True skips nulls
-    await users.create_index([("email", ASCENDING)], unique=True, sparse=True, background=True)
-    # telegram_chat_id — unique per Telegram user; sparse so non-Telegram users don't conflict
-    await users.create_index(
-        [("telegram_chat_id", ASCENDING)],
-        unique=True, sparse=True, background=True,
-        name="idx_users_telegram_chat_id",
+    await _safe_create_index(
+        users,
+        [("user_id", ASCENDING)],
+        unique=True, background=True, name="idx_users_user_id",
     )
+    # email is required for all users — non-sparse unique index is correct here
+    await _safe_create_index(
+        users,
+        [("email", ASCENDING)],
+        unique=True, background=True, name="idx_users_email",
+    )
+    # telegram_chat_id — sparse so non-Telegram users (null) don't conflict
+    await _safe_create_index(
+        users,
+        [("telegram_chat_id", ASCENDING)],
+        unique=True, sparse=True, background=True, name="idx_users_telegram_chat_id",
+    )
+
 
     recurring = db[COLL_RECURRING]
-    await recurring.create_index([("recurring_id", ASCENDING)], unique=True, background=True)
-    await recurring.create_index([("user_id", ASCENDING), ("is_active", ASCENDING)],
-                                 background=True, name="idx_recurring_user_active")
-    await recurring.create_index([("last_created", ASCENDING)],
-                                 background=True, name="idx_recurring_last_created")
+    await _safe_create_index(
+        recurring,
+        [("recurring_id", ASCENDING)],
+        unique=True, background=True, name="idx_recurring_id",
+    )
+    await _safe_create_index(
+        recurring,
+        [("user_id", ASCENDING), ("is_active", ASCENDING)],
+        background=True, name="idx_recurring_user_active",
+    )
+    await _safe_create_index(
+        recurring,
+        [("last_created", ASCENDING)],
+        background=True, name="idx_recurring_last_created",
+    )
 
     gmail_proc = db[COLL_GMAIL_PROC]
-    await gmail_proc.create_index(
+    await _safe_create_index(
+        gmail_proc,
         [("user_id", ASCENDING), ("email_id", ASCENDING)],
-        unique=True, background=True, name="idx_gmail_processed"
+        unique=True, background=True, name="idx_gmail_processed",
     )
-    await gmail_proc.create_index([("processed_at", DESCENDING)], background=True)
+    await _safe_create_index(
+        gmail_proc,
+        [("processed_at", DESCENDING)],
+        background=True, name="idx_gmail_processed_at",
+    )
 
     jwt_tokens = db[COLL_JWT_TOKENS]
-    await jwt_tokens.create_index([("user_id", ASCENDING)], background=True)
-    await jwt_tokens.create_index([("token", ASCENDING)], unique=True, background=True)
-    # MongoDB TTL index: documents are automatically removed after expires_at
-    await jwt_tokens.create_index(
+    await _safe_create_index(
+        jwt_tokens,
+        [("user_id", ASCENDING)],
+        background=True, name="idx_jwt_user_id",
+    )
+    await _safe_create_index(
+        jwt_tokens,
+        [("token", ASCENDING)],
+        unique=True, background=True, name="idx_jwt_token",
+    )
+    # TTL index: MongoDB auto-removes documents after expires_at
+    await _safe_create_index(
+        jwt_tokens,
         [("expires_at", ASCENDING)],
-        expireAfterSeconds=0, background=True, name="idx_jwt_ttl"
+        expireAfterSeconds=0, background=True, name="idx_jwt_ttl",
     )
 
     log.info("global_indexes_ensured")
-
 
 async def initialize_database():
     """
