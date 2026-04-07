@@ -22,7 +22,7 @@ import structlog
 from google.adk.runners import Runner
 from google.genai.types import Content, Part
 
-from src.agents.orchestrator import aiden_core, build_orchestrator
+from src.agents.orchestrator import build_orchestrator
 from src.core.config import settings
 from src.core.session import session_service
 from src.core.tracer import AgentTrace, TraceCollector, persist_trace
@@ -43,14 +43,16 @@ class AIDENRunner:
       run_agent_multimodal()       — non-streaming + file (Telegram bot, v4)
     """
 
-    def __init__(self, agent: Any = None) -> None:
-        _agent = agent if agent is not None else aiden_core
+    def __init__(self, agent: Any) -> None:
+        if agent is None:
+            raise ValueError("AIDENRunner requires a valid agent instance")
+
         self.runner = Runner(
-            agent=_agent,
             app_name=APP_NAME,
+            agent=agent,
             session_service=session_service,
         )
-        log.info("aiden_runner_initialized")
+        log.info("aiden_runner_initialized", app_name=APP_NAME)
 
     async def _ensure_session(self, user_id: str, session_id: str) -> None:
         existing = await session_service.get_session(
@@ -348,8 +350,17 @@ class AIDENRunner:
             }
 
 
-# Default sync runner — backwards compat with voice/vision/telegram routers
-aiden_runner = AIDENRunner()
+_aiden_runner: AIDENRunner | None = None
+
+
+def get_runner() -> AIDENRunner:
+    """Lazily initialise the default runner once to avoid import-time side effects."""
+    global _aiden_runner
+    if _aiden_runner is None:
+        from src.agents.orchestrator import aiden_core
+
+        _aiden_runner = AIDENRunner(agent=aiden_core)
+    return _aiden_runner
 
 
 async def build_runner(user: Any) -> "AIDENRunner":
@@ -368,4 +379,4 @@ async def run_agent(
     session_id: str | None = None,
 ) -> dict:
     """Convenience wrapper — non-streaming text (voice / vision routers)."""
-    return await aiden_runner.run_agent(user_id, message, session_id)
+    return await get_runner().run_agent(user_id, message, session_id)
