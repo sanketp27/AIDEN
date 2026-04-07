@@ -1,38 +1,87 @@
 """
-AIDEN Telegram Bot
-Brings the full AIDEN multi-agent system to Telegram.
+AIDEN Telegram Bot — Full Client (Mandatory Registration)
+==========================================================
+Telegram is a first-class client, equal to the web UI.
+Every user MUST register before using any feature.
 
-Features:
-  • Text messages  → routed through AIDEN orchestrator
-  • Voice notes    → transcribed with Gemini → routed to AIDEN
-  • /tasks         → list open tasks
-  • /note <text>   → quick note creation
-  • /help          → command reference
-  • Auth           → /start <jwt> links Telegram user to AIDEN user
+Registration model
+------------------
+  NEW user:      /register YourName email@x.com StrongPassword
+                 → creates AIDEN account, links this chat_id permanently
 
-Run:
-    python -m src.integrations.telegram_bot
+  EXISTING user: /login email@x.com YourPassword
+  (has web acc)  → validates credentials, links this chat_id to their account
+                   → all existing tasks/notes/calendar instantly available
 
-Or start from main.py lifespan (see instructions at the bottom).
+  Any other command before registration → clear error with instructions.
 
-Requires:
-    pip install python-telegram-bot>=21.0
-    TELEGRAM_BOT_TOKEN=... in .env
+Auth flow (no JWT in bot)
+-------------------------
+  Bot calls FastAPI with:
+    X-Bot-Secret: <BOT_SERVICE_SECRET>   (proves request is from our bot)
+    X-Telegram-Chat-Id: <chat_id>        (identifies which user)
+  FastAPI middleware resolves chat_id → user_id → UserClaims.
+  All existing routers work with zero changes.
+
+Commands
+--------
+  ACCOUNT
+    /start                   — welcome + registration instructions
+    /register <n> <e> <p>    — create account (mandatory first step)
+    /login <email> <pass>    — link existing web account to this chat
+    /unlink                  — detach this chat from AIDEN account
+    /me                      — show account and integration status
+    /help                    — full command reference
+
+  TASKS
+    /tasks                   — list open tasks
+    /tasks done              — list completed tasks
+    /task <title>            — quick-create task
+    /done <task_id>          — mark task complete
+
+  NOTES
+    /notes                   — list recent notes
+    /note <text>             — quick-create note
+    /search <query>          — semantic search across notes
+
+  CALENDAR & GMAIL
+    /today                   — today's calendar events
+    /scan                    — run Gmail → task scan
+
+  INTELLIGENCE
+    /briefing                — morning briefing
+    /forecast                — week workload forecast
+
+  MEDIA
+    Voice note               — transcribe + route through orchestrator
+    Photo / document         — vision analysis
+    Plain text               — route through AIDEN orchestrator
+
+BotFather setup (one-time, developer only)
+------------------------------------------
+  1. Chat with @BotFather → /newbot → follow prompts
+  2. Copy the token → add to .env:
+       TELEGRAM_BOT_TOKEN=123456:ABC-...
+       TELEGRAM_BOT_USERNAME=YourAIDENBot
+       BOT_SERVICE_SECRET=<python -c "import secrets;print(secrets.token_hex(32))">
+  3. Start the server — the bot launches automatically.
+  4. Users find the bot on Telegram and send /start.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
-import re
-from datetime import datetime, timezone
+import textwrap
 from typing import Optional
 
 import httpx
 import structlog
-from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 log = structlog.get_logger()
+
+
+# ── Bot settings (read from .env) ─────────────────────────────────────────────
 
 class BotSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -41,484 +90,796 @@ class BotSettings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
-
-    TELEGRAM_BOT_TOKEN: str = ""
-    AIDEN_API_URL:      str = "http://localhost:8000"
-
-bot_settings = BotSettings()
-
-
-class TelegramSession(BaseModel):
-    """Links a Telegram chat_id to an AIDEN user session."""
-    chat_id:    int
-    user_id:    str
-    jwt_token:  str
-    session_id: Optional[str] = None   # AIDEN conversation session
+    TELEGRAM_BOT_TOKEN:    str = ""
+    TELEGRAM_BOT_USERNAME: str = ""
+    BOT_SERVICE_SECRET:    str = ""
+    AIDEN_API_URL:         str = "http://localhost:8000"
 
 
-# In-memory registry: chat_id → TelegramSession
-_sessions: dict[int, TelegramSession] = {}
+bot_cfg = BotSettings()
 
+# ── Registration guard message — shown for every command before /register ─────
 
-def _get_session(chat_id: int) -> Optional[TelegramSession]:
-    return _sessions.get(chat_id)
+_NOT_REGISTERED = (
+    "👋 *Welcome to AIDEN!*\n\n"
+    "To get started, please register first:\n"
+    "`/register YourName email@example.com StrongPassword`\n\n"
+    "Already have an AIDEN account from the web app?\n"
+    "`/login email@example.com YourPassword`"
+)
 
+class AIDENClient:
+    """
+    Calls AIDEN FastAPI backend on behalf of a Telegram user.
+    Authentication is via internal headers — no JWT stored in the bot.
+    """
 
-def _register_session(chat_id: int, user_id: str, jwt_token: str) -> TelegramSession:
-    sess = TelegramSession(chat_id=chat_id, user_id=user_id, jwt_token=jwt_token)
-    _sessions[chat_id] = sess
-    log.info("telegram_session_registered", chat_id=chat_id, user_id=user_id)
-    return sess
+    def __init__(self) -> None:
+        self._base   = bot_cfg.AIDEN_API_URL.rstrip("/")
+        self._http   = httpx.AsyncClient(timeout=90)
 
-
-class AIDENAPIClient:
-    """Async HTTP client wrapping the AIDEN FastAPI backend."""
-
-    def __init__(self, base_url: str) -> None:
-        self._base   = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(timeout=60)
-
-    def _headers(self, jwt: str) -> dict[str, str]:
+    def _h(self, chat_id: int) -> dict[str, str]:
+        """Internal auth headers that identify the Telegram user."""
         return {
-            "Authorization": f"Bearer {jwt}",
-            "Content-Type":  "application/json",
+            "X-Bot-Secret":       bot_cfg.BOT_SERVICE_SECRET,
+            "X-Telegram-Chat-Id": str(chat_id),
+            "Content-Type":       "application/json",
         }
 
-    async def chat(
-        self,
-        message:    str,
-        jwt:        str,
-        session_id: Optional[str] = None,
-    ) -> dict:
+    # ── Orchestrator ──────────────────────────────────────────────────────────
+    async def chat(self, chat_id: int, message: str, session_id: Optional[str] = None) -> dict:
         payload: dict = {"message": message}
         if session_id:
             payload["session_id"] = session_id
+        r = await self._http.post(f"{self._base}/chat/sync", json=payload, headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
 
-        resp = await self._client.post(
-            f"{self._base}/chat",
-            json=payload,
-            headers=self._headers(jwt),
-        )
-        resp.raise_for_status()
-        return resp.json()
+    async def list_tasks(self, chat_id: int, status: str = "todo", limit: int = 10) -> list:
+        r = await self._http.get(f"{self._base}/tasks",
+            params={"status": status, "limit": limit}, headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
 
-    async def transcribe_voice(
-        self,
-        audio_b64: str,
-        jwt:       str,
-        language:  str = "en-US",
-    ) -> dict:
-        """Send voice note to AIDEN voice/query endpoint."""
-        resp = await self._client.post(
-            f"{self._base}/voice/query",
-            json={
-                "audio_b64":    audio_b64,
-                "language":     language,
-                "auto_execute": True,
-            },
-            headers=self._headers(jwt),
-        )
-        resp.raise_for_status()
-        return resp.json()
+    async def create_task(self, chat_id: int, title: str, priority: str = "P2") -> dict:
+        r = await self._http.post(f"{self._base}/tasks",
+            json={"title": title, "priority": priority}, headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
 
-    async def list_tasks(self, jwt: str, status: str = "todo") -> list[dict]:
-        resp = await self._client.get(
-            f"{self._base}/tasks",
-            params={"status": status, "limit": 10},
-            headers=self._headers(jwt),
-        )
-        resp.raise_for_status()
-        return resp.json()
+    async def complete_task(self, chat_id: int, task_id: str) -> dict:
+        r = await self._http.patch(f"{self._base}/tasks/{task_id}",
+            json={"status": "completed"}, headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
 
-    async def create_note(self, title: str, content: str, jwt: str) -> dict:
-        resp = await self._client.post(
-            f"{self._base}/notes",
+    async def list_notes(self, chat_id: int, limit: int = 8) -> list:
+        r = await self._http.get(f"{self._base}/notes",
+            params={"limit": limit}, headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+
+    async def create_note(self, chat_id: int, title: str, content: str) -> dict:
+        r = await self._http.post(f"{self._base}/notes",
             json={"title": title, "content": content, "tags": ["telegram"]},
-            headers=self._headers(jwt),
-        )
-        resp.raise_for_status()
-        return resp.json()
+            headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+
+    async def search_notes(self, chat_id: int, query: str) -> list:
+        r = await self._http.get(f"{self._base}/notes/search",
+            params={"q": query, "limit": 5}, headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+
+    async def get_today_events(self, chat_id: int) -> list:
+        r = await self._http.get(f"{self._base}/calendar/events/today",
+            headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+
+    async def scan_gmail(self, chat_id: int) -> dict:
+        r = await self._http.post(f"{self._base}/gmail/scan",
+            json={"max_emails": 20, "mark_emails_read": False},
+            headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+
+    async def get_briefing(self, chat_id: int) -> dict:
+        r = await self._http.post(f"{self._base}/briefing/generate",
+            headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+
+    async def get_forecast(self, chat_id: int) -> dict:
+        r = await self._http.get(f"{self._base}/forecast",
+            headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+
+    async def get_me(self, chat_id: int) -> dict:
+        r = await self._http.get(f"{self._base}/auth/me", headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+    async def transcribe_and_run(self, chat_id: int, audio_b64: str) -> dict:
+        r = await self._http.post(f"{self._base}/voice/query",
+            json={"audio_b64": audio_b64, "language": "en-US", "auto_execute": True},
+            headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
+
+    async def analyze_image(self, chat_id: int, image_b64: str, prompt: str = "") -> dict:
+        r = await self._http.post(f"{self._base}/vision/analyze",
+            json={
+                "image_b64": image_b64,
+                "prompt": prompt or "Describe this image and extract any actionable information.",
+            },
+            headers=self._h(chat_id))
+        r.raise_for_status()
+        return r.json()
 
     async def close(self) -> None:
-        await self._client.aclose()
+        await self._http.aclose()
 
 
-_aiden_client = AIDENAPIClient(bot_settings.AIDEN_API_URL)
+_api = AIDENClient()
 
 
-# ── Message formatters ───────────────────────────────────────────────────────
+# ── Formatters ────────────────────────────────────────────────────────────────
 
-_PRIORITY_EMOJI = {"P0": "🔴", "P1": "🟡", "P2": "🔵", "P3": "⚪"}
-_STATUS_EMOJI   = {"todo": "📋", "in_progress": "⚡", "completed": "✅", "cancelled": "❌"}
+_PRI = {"P0": "🔴", "P1": "🟡", "P2": "🔵", "P3": "⚪"}
 
 
-def _format_tasks(tasks: list[dict]) -> str:
+def _fmt_tasks(tasks: list) -> str:
     if not tasks:
         return "✅ No open tasks — you're all clear!"
-
-    lines = ["*Your open tasks:*\n"]
+    lines = ["*Your tasks:*\n"]
     for i, t in enumerate(tasks, 1):
-        pri   = _PRIORITY_EMOJI.get(t.get("priority", "P3"), "⚪")
-        due   = ""
+        pri = _PRI.get(t.get("priority", "P3"), "⚪")
+        due = ""
         if t.get("due_date"):
             try:
+                from datetime import datetime
                 dt  = datetime.fromisoformat(t["due_date"].replace("Z", "+00:00"))
                 due = f" · {dt.strftime('%b %d')}"
-            except ValueError:
+            except Exception:
                 pass
-        lines.append(f"{i}. {pri} {t['title']}{due}")
-
+        tid = (t.get("task_id") or "")[:8]
+        lines.append(f"{i}. {pri} {t['title']}{due}  `{tid}`")
     return "\n".join(lines)
 
 
-def _truncate(text: str, max_len: int = 4000) -> str:
-    return text[:max_len] + "…" if len(text) > max_len else text
+def _fmt_notes(notes: list) -> str:
+    if not notes:
+        return "📝 No notes yet.\nTry: `/note Your first note`"
+    lines = ["*Recent notes:*\n"]
+    for n in notes:
+        preview = n.get("content", "")[:70].replace("\n", " ")
+        if len(n.get("content", "")) > 70:
+            preview += "…"
+        lines.append(f"📝 *{n['title']}*\n   _{preview}_\n")
+    return "\n".join(lines)
 
 
-def _escape_md(text: str) -> str:
-    """Escape Telegram MarkdownV2 special characters."""
-    special = r"\_*[]()~`>#+-=|{}.!"
-    return re.sub(f"([{re.escape(special)}])", r"\\\1", text)
+def _fmt_events(events: list) -> str:
+    if not events:
+        return "📅 No events today. Enjoy the free time!"
+    from datetime import datetime
+    lines = ["*Today's schedule:*\n"]
+    for e in events:
+        start = e.get("start", {})
+        start_str = start.get("dateTime") or start.get("date", "")
+        try:
+            t = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+            time_str = t.strftime("%H:%M")
+        except Exception:
+            time_str = start_str
+        lines.append(f"⏰ {time_str} — {e.get('summary', 'Untitled')}")
+    return "\n".join(lines)
 
 
-HELP_TEXT = """
-*AIDEN — AI Executive Navigator* 🤖
-
-*Setup:*
-`/start <jwt_token>` — connect your AIDEN account
-
-*Commands:*
-`/tasks` — list your open tasks
-`/note <text>` — save a quick note
-`/scan` — trigger Gmail → task scan (if connected)
-`/help` — show this message
-
-*Just type or send a voice note* — AIDEN handles it!
-
-_Powered by Gemini & Google ADK_
-"""
+def _trunc(text: str, n: int = 4000) -> str:
+    return text[:n] + "…" if len(text) > n else text
 
 
-async def handle_start(bot, chat_id: int, args: list[str]) -> None:
-    """Parse /start <jwt_token> and register the session."""
-    if not args:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "👋 Welcome to *AIDEN*!\n\n"
-                "To connect your account, run:\n"
-                "`python generate_token.py --user-id your_name`\n\n"
-                "Then send: `/start <your_jwt_token>`"
-            ),
-            parse_mode="Markdown",
-        )
-        return
+HELP_TEXT = textwrap.dedent("""
+*AIDEN — AI Intelligent Daily Executive Navigator* 🤖
 
-    jwt = args[0].strip()
+*Account setup*
+`/register <Name> <email> <pass>` — create your account _(required first)_
+`/login <email> <pass>`           — link existing web account
+`/unlink`                         — detach this chat from AIDEN
+`/me`                             — account & integration status
 
-    # Quick sanity check — JWTs have 3 dot-separated parts
-    if jwt.count(".") != 2:
-        await bot.send_message(chat_id=chat_id, text="❌ Invalid token format.")
-        return
+*Tasks*
+`/tasks`          — list open tasks
+`/tasks done`     — list completed tasks
+`/task <title>`   — quick-create a task
+`/done <task_id>` — mark task complete
 
-    # Decode user_id from JWT payload (no verification — API will reject bad tokens)
+*Notes*
+`/notes`          — list recent notes
+`/note <text>`    — quick-create a note
+`/search <query>` — semantic search across notes
+
+*Calendar & Gmail*
+`/today`          — today's calendar events
+`/scan`           — Gmail → task scan
+
+*Intelligence*
+`/briefing`       — morning briefing
+`/forecast`       — week workload forecast
+
+*Just type anything* — AIDEN routes it to the right agent 🧠
+Send a 🎤 voice note or 📷 photo too!
+""").strip()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+async def _send(bot, chat_id: int, text: str, pm: str = "Markdown") -> None:
+    """Send message with Markdown, fall back to plain text on parse error."""
     try:
-        import json as _json
-        payload_b64 = jwt.split(".")[1]
-        payload_b64 += "=" * (4 - len(payload_b64) % 4)
-        payload = _json.loads(base64.b64decode(payload_b64))
-        user_id = payload.get("sub", "unknown")
+        await bot.send_message(chat_id=chat_id, text=_trunc(text), parse_mode=pm)
     except Exception:
-        await bot.send_message(chat_id=chat_id, text="❌ Could not decode token.")
-        return
+        try:
+            await bot.send_message(chat_id=chat_id, text=_trunc(text))
+        except Exception as exc:
+            log.error("send_failed", chat_id=chat_id, error=str(exc))
 
-    _register_session(chat_id, user_id, jwt)
 
+async def _delete_msg(bot, chat_id: int, msg_id: int) -> None:
+    """Delete a message silently (e.g. after reading credentials)."""
     try:
-        from src.repositories.prefs_repo import prefs_repo as _prefs
-        import asyncio as _asyncio
-        _asyncio.create_task(_prefs.set_telegram_chat(user_id, chat_id))
+        await bot.delete_message(chat_id=chat_id, message_id=msg_id)
     except Exception:
         pass
 
-    await bot.send_message(
-        chat_id=chat_id,
-        text=(
-            f"✅ *Connected as `{user_id}`*\n\n"
-            "You can now:\n"
-            "• Send any message and AIDEN will handle it\n"
-            "• Send a 🎤 voice note to transcribe & act on it\n"
-            "• Use /tasks, /note, /help\n\n"
-            "What would you like to do today?"
-        ),
-        parse_mode="Markdown",
-    )
+
+async def _get_registered_user(bot, chat_id: int):
+    """
+    Load the registered user for this chat_id.
+    If not registered, send the registration prompt and return None.
+    Callers should return immediately when None is returned.
+    """
+    from src.repositories.user_repo import user_repo
+    user = await user_repo.get_by_telegram_chat_id(chat_id)
+    if not user:
+        await _send(bot, chat_id, _NOT_REGISTERED)
+        return None
+    return user
 
 
-async def handle_tasks_command(bot, chat_id: int, sess: TelegramSession) -> None:
-    await bot.send_chat_action(chat_id=chat_id, action="typing")
+async def _call(bot, chat_id: int, coro, err: str = "Error"):
+    """
+    Await an API coroutine and handle errors gracefully.
+    Returns the result on success, None on any failure.
+    """
     try:
-        tasks = await _aiden_client.list_tasks(sess.jwt_token)
-        text  = _format_tasks(tasks)
+        return await coro
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status == 404:
+            detail = ""
+            try:
+                detail = exc.response.json().get("detail", "")
+            except Exception:
+                pass
+            if detail == "NOT_REGISTERED":
+                await _send(bot, chat_id, _NOT_REGISTERED)
+            else:
+                await _send(bot, chat_id, f"⚠️ {err}: resource not found.")
+        elif status == 401:
+            await _send(bot, chat_id, "❌ Authentication error. Please contact the AIDEN admin.")
+        elif status == 422:
+            await _send(bot, chat_id, f"⚠️ {err}: invalid input.")
+        else:
+            await _send(bot, chat_id, f"⚠️ {err} (server error {status}).")
+        return None
     except Exception as exc:
-        log.error("telegram_list_tasks_failed", chat_id=chat_id, error=str(exc))
-        text = f"⚠️ Could not fetch tasks: {exc}"
+        log.error("api_call_failed", chat_id=chat_id, error=str(exc), operation=err)
+        await _send(bot, chat_id, f"⚠️ {err}: {exc}")
+        return None
 
-    await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+
+# ── In-memory session cache (non-critical; lost on restart is acceptable) ─────
+_sessions: dict[int, str] = {}
 
 
-async def handle_note_command(bot, chat_id: int, sess: TelegramSession, args: list[str]) -> None:
-    if not args:
-        await bot.send_message(chat_id=chat_id, text="Usage: `/note Your note text here`", parse_mode="Markdown")
+# ── Command handlers ──────────────────────────────────────────────────────────
+
+async def cmd_start(update, ctx) -> None:
+    """/start — always show registration instructions."""
+    chat_id = update.effective_chat.id
+    first   = update.effective_user.first_name or "there"
+
+    from src.repositories.user_repo import user_repo
+    user = await user_repo.get_by_telegram_chat_id(chat_id)
+
+    if user:
+        await _send(ctx.bot, chat_id,
+            f"👋 Welcome back, *{user.name}*!\n"
+            "What can I help you with today?\n\n"
+            "Type /help to see all available commands.")
+    else:
+        await _send(ctx.bot, chat_id,
+            f"👋 Hello {first}! Welcome to *AIDEN* — your AI Executive Navigator.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "To get started, you need to *register*:\n\n"
+            "`/register YourName email@example.com Password`\n\n"
+            "📌 *Example:*\n"
+            "`/register John john@company.com MyPass123`\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Already have an AIDEN web account?\n"
+            "`/login email@example.com Password`\n\n"
+            "_Registration is required to keep your data secure and organized._")
+
+
+async def cmd_register(update, ctx) -> None:
+    """/register <Name> <email> <password> — create AIDEN account (mandatory)."""
+    chat_id  = update.effective_chat.id
+    args     = ctx.args or []
+    msg_id   = update.message.message_id
+
+    # Delete message immediately — contains password
+    await _delete_msg(ctx.bot, chat_id, msg_id)
+
+    if len(args) < 3:
+        await _send(ctx.bot, chat_id,
+            "❌ *Usage:* `/register YourName email@example.com Password`\n\n"
+            "📌 *Example:*\n"
+            "`/register John john@company.com MyPass123`\n\n"
+            "_Your message is deleted immediately for security._")
         return
 
+    # Name can be multiple words — everything before the last two args
+    password = args[-1]
+    email    = args[-2]
+    name     = " ".join(args[:-2])
+
+    if not name:
+        await _send(ctx.bot, chat_id,
+            "❌ Please include your name.\n"
+            "`/register John Doe john@example.com Password`")
+        return
+
+    tg_username = update.effective_user.username
+
+    from src.repositories.user_repo import user_repo
+    try:
+        user = await user_repo.register_via_telegram(
+            chat_id=chat_id,
+            name=name,
+            email=email,
+            password=password,
+            telegram_username=tg_username,
+        )
+        await _send(ctx.bot, chat_id,
+            f"✅ *Account created! Welcome, {user.name}!*\n\n"
+            "Your AIDEN account is ready. You can now:\n"
+            "• 📋 Manage tasks → /tasks\n"
+            "• 📝 Create notes → /note\n"
+            "• 📅 Check calendar → /today\n"
+            "• ☀️ Get briefing → /briefing\n"
+            "• 🧠 Just type anything and I'll figure it out\n\n"
+            "🌐 Log in to the web dashboard with the same email & password.\n\n"
+            "Type /help to see all commands.")
+        log.info("telegram_registered", chat_id=chat_id, user_id=user.user_id)
+
+    except ValueError as exc:
+        await _send(ctx.bot, chat_id, f"❌ Registration failed: {exc}")
+
+
+async def cmd_login(update, ctx) -> None:
+    """/login <email> <password> — link existing web account to this chat."""
+    chat_id = update.effective_chat.id
+    args    = ctx.args or []
+    msg_id  = update.message.message_id
+
+    # Delete message immediately — contains password
+    await _delete_msg(ctx.bot, chat_id, msg_id)
+
+    if len(args) != 2:
+        await _send(ctx.bot, chat_id,
+            "❌ *Usage:* `/login email@example.com Password`\n\n"
+            "_Your message is deleted immediately for security._")
+        return
+
+    email, password = args[0], args[1]
+    tg_username = update.effective_user.username
+
+    from src.repositories.user_repo import user_repo
+    try:
+        user = await user_repo.login_via_telegram(
+            chat_id=chat_id,
+            email=email,
+            password=password,
+            telegram_username=tg_username,
+        )
+        if not user:
+            await _send(ctx.bot, chat_id,
+                "❌ *Invalid email or password.*\n\n"
+                "Please check your credentials and try again.\n"
+                "If you don't have an account yet, use:\n"
+                "`/register YourName email@example.com Password`")
+            return
+
+        await _send(ctx.bot, chat_id,
+            f"✅ *Logged in as {user.name}!*\n\n"
+            "Your existing tasks, notes, calendar, and Gmail from the web app "
+            "are all available here now.\n\n"
+            "Type /help to see all commands.")
+        log.info("telegram_login", chat_id=chat_id, user_id=user.user_id)
+
+    except ValueError as exc:
+        await _send(ctx.bot, chat_id, f"❌ {exc}")
+
+
+async def cmd_unlink(update, ctx) -> None:
+    """/unlink — detach this Telegram chat from AIDEN account."""
+    chat_id = update.effective_chat.id
+    user = await _get_registered_user(ctx.bot, chat_id)
+    if not user:
+        return
+
+    from src.repositories.user_repo import user_repo
+    await user_repo.unlink_telegram(user.user_id)
+    await _send(ctx.bot, chat_id,
+        "✅ *Telegram unlinked* from your AIDEN account.\n\n"
+        "Your account and data are still safe in AIDEN.\n"
+        "To reconnect: `/login email@example.com Password`")
+
+
+async def cmd_me(update, ctx) -> None:
+    """/me — account and integration status."""
+    chat_id = update.effective_chat.id
+    user = await _get_registered_user(ctx.bot, chat_id)
+    if not user:
+        return
+
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    me = await _call(ctx.bot, chat_id, _api.get_me(chat_id), "Could not fetch account")
+    if not me:
+        return
+
+    intg     = me.get("integrations", {})
+    gmail    = intg.get("gmail", {})
+    cal      = intg.get("calendar", {})
+    gmail_ic = "✅" if gmail.get("connected") else "❌"
+    cal_ic   = "✅" if cal.get("connected") else "❌"
+    gmail_em = gmail.get("connected_email", "not connected")
+
+    await _send(ctx.bot, chat_id,
+        f"👤 *{me.get('name')}*\n"
+        f"📧 {me.get('email')}\n"
+        f"Role: `{me.get('role')}`\n\n"
+        f"*Integrations*\n"
+        f"{gmail_ic} Gmail: {gmail_em}\n"
+        f"{cal_ic} Google Calendar\n\n"
+        f"🌐 Web dashboard: same email & password")
+
+
+async def cmd_help(update, ctx) -> None:
+    await _send(ctx.bot, update.effective_chat.id, HELP_TEXT)
+
+
+# ── Task commands ─────────────────────────────────────────────────────────────
+
+async def cmd_tasks(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    status = "completed" if ctx.args and ctx.args[0].lower() == "done" else "todo"
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    tasks = await _call(ctx.bot, chat_id, _api.list_tasks(chat_id, status=status), "Could not fetch tasks")
+    if tasks is not None:
+        await _send(ctx.bot, chat_id, _fmt_tasks(tasks))
+
+
+async def cmd_task(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    args = ctx.args or []
+    if not args:
+        await _send(ctx.bot, chat_id, "Usage: `/task Review the proposal`")
+        return
+    title = " ".join(args)
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    task = await _call(ctx.bot, chat_id, _api.create_task(chat_id, title), "Could not create task")
+    if task:
+        pri = _PRI.get(task.get("priority", "P2"), "🔵")
+        tid = (task.get("task_id") or "")[:8]
+        await _send(ctx.bot, chat_id,
+            f"✅ Task created!\n{pri} *{task['title']}*\n`{tid}`")
+
+
+async def cmd_done(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    args = ctx.args or []
+    if not args:
+        await _send(ctx.bot, chat_id, "Usage: `/done <task_id>`\nGet the ID from /tasks")
+        return
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    task = await _call(ctx.bot, chat_id, _api.complete_task(chat_id, args[0]), "Could not update task")
+    if task:
+        await _send(ctx.bot, chat_id, f"✅ Marked complete: *{task.get('title', args[0])}*")
+
+
+# ── Note commands ─────────────────────────────────────────────────────────────
+
+async def cmd_notes(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    notes = await _call(ctx.bot, chat_id, _api.list_notes(chat_id), "Could not fetch notes")
+    if notes is not None:
+        await _send(ctx.bot, chat_id, _fmt_notes(notes))
+
+
+async def cmd_note(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    args = ctx.args or []
+    if not args:
+        await _send(ctx.bot, chat_id, "Usage: `/note Meeting recap: decided to launch in Q3`")
+        return
     content = " ".join(args)
     title   = content[:60] + ("…" if len(content) > 60 else "")
-
-    await bot.send_chat_action(chat_id=chat_id, action="typing")
-    try:
-        note = await _aiden_client.create_note(title=title, content=content, jwt=sess.jwt_token)
-        await bot.send_message(
-            chat_id=chat_id,
-            text=f"📝 Note saved!\n*{note.get('title', title)}*",
-            parse_mode="Markdown",
-        )
-    except Exception as exc:
-        log.error("telegram_create_note_failed", chat_id=chat_id, error=str(exc))
-        await bot.send_message(chat_id=chat_id, text=f"⚠️ Could not save note: {exc}")
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    note = await _call(ctx.bot, chat_id, _api.create_note(chat_id, title, content), "Could not save note")
+    if note:
+        await _send(ctx.bot, chat_id, f"📝 Note saved!\n*{note.get('title', title)}*")
 
 
-async def handle_scan_command(bot, chat_id: int, sess: TelegramSession) -> None:
-    """Trigger Gmail scan via AIDEN API."""
-    await bot.send_message(chat_id=chat_id, text="📧 Scanning your Gmail for action items…")
-    await bot.send_chat_action(chat_id=chat_id, action="typing")
-
-    try:
-        resp = await _aiden_client._client.post(
-            f"{bot_settings.AIDEN_API_URL}/gmail/scan",
-            json={"max_emails": 20, "mark_emails_read": False},
-            headers=_aiden_client._headers(sess.jwt_token),
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        await bot.send_message(
-            chat_id=chat_id,
-            text=(
-                f"✅ *Gmail Scan Complete*\n"
-                f"Emails scanned: {data.get('emails_scanned', 0)}\n"
-                f"Tasks created: {data.get('tasks_created', 0)}\n\n"
-                f"Use /tasks to see your updated task list."
-            ),
-            parse_mode="Markdown",
-        )
-    except Exception as exc:
-        log.error("telegram_scan_failed", chat_id=chat_id, error=str(exc))
-        await bot.send_message(chat_id=chat_id, text=f"⚠️ Scan failed: {exc}")
-
-
-async def handle_text_message(bot, chat_id: int, text: str, sess: TelegramSession) -> None:
-    """Route plain text through AIDEN orchestrator."""
-    await bot.send_chat_action(chat_id=chat_id, action="typing")
-
-    try:
-        result = await _aiden_client.chat(
-            message=f"[TELEGRAM] {text}",
-            jwt=sess.jwt_token,
-            session_id=sess.session_id,
-        )
-
-        # Persist session_id for conversation continuity
-        sess.session_id = result.get("session_id")
-
-        response = result.get("response", "…")
-        agents   = result.get("agents_used", [])
-
-        reply = _truncate(response)
-
-        # Append agent attribution if any
-        if agents:
-            agent_str = " · ".join(a.upper() for a in agents)
-            reply += f"\n\n_via {agent_str}_"
-
-        await bot.send_message(chat_id=chat_id, text=reply, parse_mode="Markdown")
-
-    except httpx.HTTPStatusError as exc:
-        log.error("telegram_chat_http_error", chat_id=chat_id, status=exc.response.status_code)
-        if exc.response.status_code == 401:
-            await bot.send_message(
-                chat_id=chat_id,
-                text="❌ Token expired. Please reconnect with `/start <new_token>`.",
-                parse_mode="Markdown",
-            )
+async def cmd_search(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    args = ctx.args or []
+    if not args:
+        await _send(ctx.bot, chat_id, "Usage: `/search Q3 budget`")
+        return
+    query = " ".join(args)
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    results = await _call(ctx.bot, chat_id, _api.search_notes(chat_id, query), "Search failed")
+    if results is not None:
+        if not results:
+            await _send(ctx.bot, chat_id, f"🔍 No results for: _{query}_")
         else:
-            await bot.send_message(chat_id=chat_id, text=f"⚠️ AIDEN error: {exc}")
-    except Exception as exc:
-        log.error("telegram_chat_failed", chat_id=chat_id, error=str(exc))
-        await bot.send_message(chat_id=chat_id, text=f"⚠️ Error: {exc}")
+            lines = [f"🔍 *Results for \"{query}\":*\n"]
+            for r in results:
+                preview = r.get("content", "")[:80].replace("\n", " ")
+                lines.append(f"📝 *{r['title']}*\n   _{preview}_\n")
+            await _send(ctx.bot, chat_id, "\n".join(lines))
 
 
-async def handle_voice_message(bot, chat_id: int, file_id: str, sess: TelegramSession) -> None:
-    """
-    Download voice note → base64 → Gemini transcription → AIDEN.
-    Updates session_id for conversation continuity.
-    """
-    await bot.send_message(chat_id=chat_id, text="🎤 Processing your voice note…")
-    await bot.send_chat_action(chat_id=chat_id, action="typing")
+# ── Calendar, Gmail, Intelligence ─────────────────────────────────────────────
+
+async def cmd_today(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    events = await _call(ctx.bot, chat_id, _api.get_today_events(chat_id), "Could not fetch calendar")
+    if events is not None:
+        await _send(ctx.bot, chat_id, _fmt_events(events))
+
+
+async def cmd_scan(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    await _send(ctx.bot, chat_id, "📧 Scanning your Gmail for action items…")
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    result = await _call(ctx.bot, chat_id, _api.scan_gmail(chat_id), "Gmail scan failed")
+    if result:
+        await _send(ctx.bot, chat_id,
+            f"✅ *Gmail Scan Complete*\n"
+            f"Emails scanned: {result.get('emails_scanned', 0)}\n"
+            f"Tasks created:  {result.get('tasks_created', 0)}\n\n"
+            "Use /tasks to see your updated list.")
+
+
+async def cmd_briefing(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    await _send(ctx.bot, chat_id, "☀️ Generating your briefing…")
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    result = await _call(ctx.bot, chat_id, _api.get_briefing(chat_id), "Briefing failed")
+    if result:
+        text = result.get("briefing") or result.get("content") or str(result)
+        await _send(ctx.bot, chat_id, f"☀️ *Your Morning Briefing*\n\n{text}")
+
+
+async def cmd_forecast(update, ctx) -> None:
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    result = await _call(ctx.bot, chat_id, _api.get_forecast(chat_id), "Forecast failed")
+    if result:
+        text = result.get("forecast") or result.get("summary") or str(result)
+        await _send(ctx.bot, chat_id, f"📊 *Workload Forecast*\n\n{text}")
+
+
+# ── Message handlers ──────────────────────────────────────────────────────────
+
+async def on_text(update, ctx) -> None:
+    """Route all plain-text messages through AIDEN orchestrator."""
+    if not update.message or not update.message.text:
+        return
+    chat_id = update.effective_chat.id
+    text    = update.message.text
+
+    user = await _get_registered_user(ctx.bot, chat_id)
+    if not user:
+        return
+
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    result = await _call(
+        ctx.bot, chat_id,
+        _api.chat(chat_id, f"[TELEGRAM] {text}", _sessions.get(chat_id)),
+        "Something went wrong",
+    )
+    if not result:
+        return
+
+    _sessions[chat_id] = result.get("session_id") or _sessions.get(chat_id, "")
+    response = result.get("response", "…")
+    agents   = result.get("agents_used", [])
+    reply    = _trunc(response)
+    if agents:
+        reply += f"\n\n_via {' · '.join(a.upper() for a in agents)}_"
+    await _send(ctx.bot, chat_id, reply)
+
+
+async def on_voice(update, ctx) -> None:
+    """Transcribe voice note and route through orchestrator."""
+    if not update.message:
+        return
+    chat_id   = update.effective_chat.id
+    voice_obj = update.message.voice or update.message.audio
+    if not voice_obj:
+        return
+
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+
+    await _send(ctx.bot, chat_id, "🎤 Processing your voice note…")
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     try:
-        # Download voice file from Telegram
-        tg_file  = await bot.get_file(file_id)
-        dl_url   = tg_file.file_path   # already full URL in python-telegram-bot v21
+        tg_file = await ctx.bot.get_file(voice_obj.file_id)
         async with httpx.AsyncClient() as dl:
-            audio_resp = await dl.get(dl_url)
-            audio_resp.raise_for_status()
-            audio_bytes = audio_resp.content
-
-        audio_b64 = base64.b64encode(audio_bytes).decode()
-
-        # Transcribe + execute via AIDEN voice/query
-        result = await _aiden_client.transcribe_voice(
-            audio_b64=audio_b64,
-            jwt=sess.jwt_token,
-        )
-
-        transcript = result.get("transcript", "")
-        aiden_resp = result.get("aiden_response", "")
-        agents     = result.get("actions_taken", [])
-
-        # Update session
-        # (voice/query doesn't return session_id — handled inside AIDEN)
-
-        reply_parts = []
-        if transcript:
-            reply_parts.append(f"📝 *Transcript:* _{transcript}_")
-        if aiden_resp:
-            reply_parts.append(f"\n{aiden_resp}")
-        if agents:
-            reply_parts.append(f"\n_via {' · '.join(a.upper() for a in agents)}_")
-
-        reply = "\n".join(reply_parts) or "✅ Processed!"
-        await bot.send_message(
-            chat_id=chat_id,
-            text=_truncate(reply),
-            parse_mode="Markdown",
-        )
-
+            resp = await dl.get(tg_file.file_path)
+        audio_b64 = base64.b64encode(resp.content).decode()
     except Exception as exc:
-        log.error("telegram_voice_failed", chat_id=chat_id, error=str(exc))
-        await bot.send_message(chat_id=chat_id, text=f"⚠️ Voice processing failed: {exc}")
+        await _send(ctx.bot, chat_id, f"⚠️ Could not download voice note: {exc}")
+        return
+
+    result = await _call(ctx.bot, chat_id,
+        _api.transcribe_and_run(chat_id, audio_b64), "Voice processing failed")
+    if not result:
+        return
+
+    parts = []
+    if result.get("transcript"):
+        parts.append(f"📝 *Transcript:* _{result['transcript']}_")
+    if result.get("aiden_response"):
+        parts.append(result["aiden_response"])
+    if result.get("actions_taken"):
+        parts.append(f"_via {' · '.join(a.upper() for a in result['actions_taken'])}_")
+    await _send(ctx.bot, chat_id, "\n\n".join(parts) or "✅ Processed!")
+
+
+async def on_photo(update, ctx) -> None:
+    """Analyze photo/document with vision agent."""
+    if not update.message:
+        return
+    chat_id = update.effective_chat.id
+
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+
+    photo  = update.message.photo[-1] if update.message.photo else None
+    doc    = update.message.document
+    target = photo or doc
+    if not target:
+        return
+
+    caption = update.message.caption or ""
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    try:
+        tg_file = await ctx.bot.get_file(target.file_id)
+        async with httpx.AsyncClient() as dl:
+            resp = await dl.get(tg_file.file_path)
+        image_b64 = base64.b64encode(resp.content).decode()
+    except Exception as exc:
+        await _send(ctx.bot, chat_id, f"⚠️ Could not download image: {exc}")
+        return
+
+    result = await _call(ctx.bot, chat_id,
+        _api.analyze_image(chat_id, image_b64, caption), "Vision analysis failed")
+    if result:
+        text = result.get("analysis") or result.get("response") or str(result)
+        await _send(ctx.bot, chat_id, f"👁️ *Vision Analysis*\n\n{text}")
+
+
+# ── Build and run ─────────────────────────────────────────────────────────────
 
 def build_application():
-    """Build and return the python-telegram-bot Application."""
     try:
-        from telegram import Update
-        from telegram.ext import (
-            Application,
-            CommandHandler,
-            ContextTypes,
-            MessageHandler,
-            filters,
-        )
+        from telegram.ext import Application, CommandHandler, MessageHandler, filters
     except ImportError as exc:
         raise ImportError(
-            "python-telegram-bot not installed. Run: pip install 'python-telegram-bot>=21.0'"
+            "python-telegram-bot not installed.\n"
+            "Run: pip install 'python-telegram-bot>=21.0'"
         ) from exc
 
+    app = Application.builder().token(bot_cfg.TELEGRAM_BOT_TOKEN).build()
 
-    async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        chat_id = update.effective_chat.id
-        await handle_start(ctx.bot, chat_id, ctx.args or [])
+    # Account (open to all — no registration check)
+    app.add_handler(CommandHandler("start",    cmd_start))
+    app.add_handler(CommandHandler("register", cmd_register))
+    app.add_handler(CommandHandler("login",    cmd_login))
+    app.add_handler(CommandHandler("help",     cmd_help))
 
-    async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await update.message.reply_text(HELP_TEXT, parse_mode="Markdown")
+    # Account (requires registration)
+    app.add_handler(CommandHandler("unlink",   cmd_unlink))
+    app.add_handler(CommandHandler("me",       cmd_me))
 
-    async def cmd_tasks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        chat_id = update.effective_chat.id
-        sess = _get_session(chat_id)
-        if not sess:
-            await update.message.reply_text("❌ Not connected. Send `/start <token>` first.", parse_mode="Markdown")
-            return
-        await handle_tasks_command(ctx.bot, chat_id, sess)
+    # Tasks
+    app.add_handler(CommandHandler("tasks",    cmd_tasks))
+    app.add_handler(CommandHandler("task",     cmd_task))
+    app.add_handler(CommandHandler("done",     cmd_done))
 
-    async def cmd_note(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        chat_id = update.effective_chat.id
-        sess = _get_session(chat_id)
-        if not sess:
-            await update.message.reply_text("❌ Not connected. Send `/start <token>` first.", parse_mode="Markdown")
-            return
-        await handle_note_command(ctx.bot, chat_id, sess, ctx.args or [])
+    # Notes
+    app.add_handler(CommandHandler("notes",    cmd_notes))
+    app.add_handler(CommandHandler("note",     cmd_note))
+    app.add_handler(CommandHandler("search",   cmd_search))
 
-    async def cmd_scan(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        chat_id = update.effective_chat.id
-        sess = _get_session(chat_id)
-        if not sess:
-            await update.message.reply_text("❌ Not connected. Send `/start <token>` first.", parse_mode="Markdown")
-            return
-        await handle_scan_command(ctx.bot, chat_id, sess)
+    # Calendar & Gmail
+    app.add_handler(CommandHandler("today",    cmd_today))
+    app.add_handler(CommandHandler("scan",     cmd_scan))
 
-    async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if not update.message or not update.message.text:
-            return
-        chat_id = update.effective_chat.id
-        sess = _get_session(chat_id)
-        if not sess:
-            await update.message.reply_text(
-                "👋 Hi! I'm AIDEN. Connect with `/start <jwt_token>`.",
-                parse_mode="Markdown",
-            )
-            return
-        await handle_text_message(ctx.bot, chat_id, update.message.text, sess)
+    # Intelligence
+    app.add_handler(CommandHandler("briefing", cmd_briefing))
+    app.add_handler(CommandHandler("forecast", cmd_forecast))
 
-    async def on_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if not update.message:
-            return
-        chat_id = update.effective_chat.id
-        sess = _get_session(chat_id)
-        if not sess:
-            await update.message.reply_text("❌ Not connected. Send `/start <token>` first.", parse_mode="Markdown")
-            return
-
-        voice_obj = update.message.voice or update.message.audio
-        if not voice_obj:
-            return
-
-        await handle_voice_message(ctx.bot, chat_id, voice_obj.file_id, sess)
-
-    app = (
-        Application.builder()
-        .token(bot_settings.TELEGRAM_BOT_TOKEN)
-        .build()
-    )
-
-    app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CommandHandler("help",  cmd_help))
-    app.add_handler(CommandHandler("tasks", cmd_tasks))
-    app.add_handler(CommandHandler("note",  cmd_note))
-    app.add_handler(CommandHandler("scan",  cmd_scan))
+    # Media
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, on_voice))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, on_photo))
 
     log.info("telegram_bot_built")
     return app
 
 
 async def run_bot() -> None:
-    """Start the Telegram bot (polling mode). Blocks until Ctrl-C."""
-    if not bot_settings.TELEGRAM_BOT_TOKEN:
-        log.error("telegram_token_missing",
-                  message="Set TELEGRAM_BOT_TOKEN in .env to run the bot")
+    """Entry point — called from main.py lifespan as a background task."""
+    if not bot_cfg.TELEGRAM_BOT_TOKEN:
+        log.warning("telegram_bot_disabled", reason="TELEGRAM_BOT_TOKEN not set in .env")
+        return
+    if not bot_cfg.BOT_SERVICE_SECRET:
+        log.warning("telegram_bot_disabled", reason="BOT_SERVICE_SECRET not set in .env")
         return
 
     app = build_application()
-
-    log.info("telegram_bot_starting", api_url=bot_settings.AIDEN_API_URL)
+    log.info("telegram_bot_starting", api=bot_cfg.AIDEN_API_URL)
     async with app:
         await app.initialize()
         await app.start()
         await app.updater.start_polling(drop_pending_updates=True)
-        log.info("telegram_bot_running", hint="Press Ctrl-C to stop")
-        await asyncio.Event().wait()   # block forever
+        log.info("telegram_bot_running")
+        await asyncio.Event().wait()
+
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(run_bot())

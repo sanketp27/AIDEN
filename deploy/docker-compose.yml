@@ -1,11 +1,7 @@
 version: '3.9'
 
-# ChromaDB has been removed from Docker — it now runs as a Python library
-# using chromadb.PersistentClient(). Data lives in ./data/chroma on the host.
-# Only MongoDB needs Docker.
-
 services:
-  # MongoDB for structured data (tasks, notes, sessions)
+
   mongo:
     image: mongo:7
     container_name: aiden_mongo
@@ -23,62 +19,81 @@ services:
     networks:
       - aiden_network
 
-  # MCP Google Calendar Server
-  calendar-mcp:
-    image: node:20-alpine
-    container_name: aiden_calendar_mcp
-    command: npx @modelcontextprotocol/server-google-calendar
-    ports:
-      - "3000:3000"
+  workspace-mcp:
+    image: python:3.11-slim
+    container_name: aiden_workspace_mcp
+    working_dir: /app
+    command: >
+      sh -c "pip install -q google-workspace-mcp fastmcp &&
+             python -m google_workspace_mcp"
     environment:
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GOOGLE_WORKSPACE_ENABLED_CAPABILITIES: calendar,gmail,drive,docs
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8001
+      MCP_TRANSPORT: sse
+    ports:
+      - "8001:8001"
     networks:
       - aiden_network
+    restart: unless-stopped
 
-  # FastAPI Backend (uncomment when ready to deploy)
-  # api:
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/Dockerfile.api
-  #   container_name: aiden_api
-  #   ports:
-  #     - "8000:8000"
-  #   environment:
-  #     GEMINI_API_KEY: ${GEMINI_API_KEY}
-  #     MONGO_URI: mongodb://mongo:27017
-  #     MONGO_DB: aiden
-  #     CHROMA_PATH: /app/data/chroma   # mounted volume below
-  #     CALENDAR_MCP_URL: http://calendar-mcp:3000/sse
-  #     JWT_SECRET: ${JWT_SECRET}
-  #     ENV: production
-  #   volumes:
-  #     - chroma_data:/app/data/chroma  # persist ChromaDB data
-  #   depends_on:
-  #     mongo:
-  #       condition: service_healthy
-  #   networks:
-  #     - aiden_network
+  mongodb-mcp:
+    image: node:20-alpine
+    container_name: aiden_mongodb_mcp
+    command: >
+      sh -c "npx -y @mongodb-js/mongodb-mcp-server --port 8002"
+    environment:
+      MCP_MONGODB_URI: ${MONGO_URI:-mongodb://mongo:27017}
+      MCP_TRANSPORT: sse
+      MCP_PORT: 8002
+      MCP_MONGODB_READ_ONLY: "true"
+    ports:
+      - "8002:8002"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - aiden_network
+    restart: unless-stopped
 
-  # Streamlit UI (uncomment when ready to deploy)
-  # ui:
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/Dockerfile.ui
-  #   container_name: aiden_ui
-  #   ports:
-  #     - "8501:8501"
-  #   environment:
-  #     API_BASE_URL: http://api:8000
-  #   depends_on:
-  #     - api
-  #   networks:
-  #     - aiden_network
+  notion-mcp:
+    image: node:20-alpine
+    container_name: aiden_notion_mcp
+    command: >
+      sh -c "npx -y @notionhq/notion-mcp-server --port 8003"
+    environment:
+      OPENAPI_MCP_HEADERS: '{"Authorization":"Bearer ${NOTION_TOKEN:-}","Notion-Version":"2022-06-28"}'
+      MCP_TRANSPORT: sse
+      MCP_PORT: 8003
+    ports:
+      - "8003:8003"
+    networks:
+      - aiden_network
+    restart: unless-stopped
+
+  github-mcp:
+    image: node:20-alpine
+    container_name: aiden_github_mcp
+    command: >
+      sh -c "npx -y @modelcontextprotocol/server-github --port 8004"
+    environment:
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_TOKEN:-}
+      MCP_TRANSPORT: sse
+      MCP_PORT: 8004
+    ports:
+      - "8004:8004"
+    networks:
+      - aiden_network
+    restart: unless-stopped
+    profiles:
+      - dev
 
 volumes:
   mongo_data:
     driver: local
-  chroma_data:    # used only when API container is enabled above
+  chroma_data:
     driver: local
 
 networks:

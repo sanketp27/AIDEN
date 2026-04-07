@@ -92,19 +92,24 @@ RECURRING_TASK_SCHEMA = {
 USER_SCHEMA = {
     "$jsonSchema": {
         "bsonType": "object",
-        "required": ["user_id", "email", "name", "hashed_password"],
+        # email and hashed_password are always required (mandatory registration)
+        "required": ["user_id", "name", "email", "hashed_password"],
         "properties": {
-            "user_id":          {"bsonType": "string"},
-            "email":            {"bsonType": "string"},
-            "name":             {"bsonType": "string"},
-            "hashed_password":  {"bsonType": "string"},
-            "role":             {"bsonType": "string", "enum": ["executive","user","developer"]},
-            "api_keys":         {"bsonType": "array"},
-            "webhook_url":      {"bsonType": ["string", "null"]},
-            "briefing_time":    {"bsonType": "string"},
-            "is_active":        {"bsonType": "bool"},
-            "created_at":       {"bsonType": "date"},
-            "updated_at":       {"bsonType": "date"},
+            "user_id":           {"bsonType": "string"},
+            "name":              {"bsonType": "string"},
+            "email":             {"bsonType": "string"},
+            "hashed_password":   {"bsonType": "string"},
+            # Telegram identity — None until user registers via bot
+            "telegram_chat_id":  {"bsonType": ["long", "int", "null"]},
+            "telegram_username": {"bsonType": ["string", "null"]},
+            "role":              {"bsonType": "string",
+                                  "enum": ["executive","user","developer","guest"]},
+            "api_keys":          {"bsonType": "array"},
+            "webhook_url":       {"bsonType": ["string", "null"]},
+            "briefing_time":     {"bsonType": "string"},
+            "is_active":         {"bsonType": "bool"},
+            "created_at":        {"bsonType": "date"},
+            "updated_at":        {"bsonType": "date"},
         }
     }
 }
@@ -175,7 +180,6 @@ async def _ensure_collection(db, name: str, schema: dict | None = None):
 async def _ensure_global_indexes(db):
     """Create indexes on global (non-per-user) collections."""
 
-    # ── sessions ────────────────────────────────────────────────────────────
     sessions = db[COLL_SESSIONS]
     await sessions.create_index(
         [("session_id", ASCENDING), ("app_name", ASCENDING), ("user_id", ASCENDING)],
@@ -186,7 +190,14 @@ async def _ensure_global_indexes(db):
 
     users = db[COLL_USERS]
     await users.create_index([("user_id", ASCENDING)], unique=True, background=True)
-    await users.create_index([("email", ASCENDING)], unique=True, background=True)
+    # email is optional (Telegram-only users may not have one); sparse=True skips nulls
+    await users.create_index([("email", ASCENDING)], unique=True, sparse=True, background=True)
+    # telegram_chat_id — unique per Telegram user; sparse so non-Telegram users don't conflict
+    await users.create_index(
+        [("telegram_chat_id", ASCENDING)],
+        unique=True, sparse=True, background=True,
+        name="idx_users_telegram_chat_id",
+    )
 
     recurring = db[COLL_RECURRING]
     await recurring.create_index([("recurring_id", ASCENDING)], unique=True, background=True)
