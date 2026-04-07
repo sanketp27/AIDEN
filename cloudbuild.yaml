@@ -1,4 +1,4 @@
-# cloudbuild.yaml — AIDEN v5 CI/CD to Cloud Run + Vertex AI
+# cloudbuild.yaml — AIDEN v4.0 CI/CD to Cloud Run + Vertex AI
 substitutions:
   _PROJECT_ID: "${PROJECT_ID}"
   _REGION: "us-central1"

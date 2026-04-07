@@ -5,6 +5,7 @@ Bidirectional audio streaming
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from src.api.middleware import get_current_user, UserClaims
 from src.tools.gemini_live import live_session_manager
+from src.models.user import UserRole
 from jose import jwt
 from src.core.config import settings
 import structlog

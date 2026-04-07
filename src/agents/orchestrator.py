@@ -83,6 +83,15 @@ MONGODB MCP (read-only direct queries):
 🎙️ VOICE AGENT (voice_agent):
   Keywords: transcribe, read aloud, audio, voice memo, speech, dictate
 
+📄 FILE UPLOAD — /chat/upload endpoint (automatic routing):
+  Supported: JPEG/PNG/GIF (→ VisionAgent), OGG/MP3/WAV/M4A (→ VoiceAgent),
+             PDF/TXT/CSV (→ orchestrator-level analysis),
+             DOCX (→ python-docx extraction + analysis),
+             XLSX (→ openpyxl extraction + analysis)
+  Max size: 20 MB. FileProcessor converts to Gemini-compatible Parts.
+  User caption becomes the instruction; file content is prepended as inline_data.
+  After analysis, always offer: create tasks / save note / add calendar event
+
 📁 DRIVE AGENT (drive_agent):
   Keywords: Drive, my document, file, report, spreadsheet, Google Doc, summarize file
   (Use DriveAgent when workspace-mcp is unavailable, or for complex summarisation)

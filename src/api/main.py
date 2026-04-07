@@ -1,5 +1,5 @@
 """
-AIDEN v5.0 API — FastAPI application
+AIDEN v3.0 API — FastAPI application
 =====================================
 Added in v3.0:
   - developer_settings router (PATCH/GET /settings/developer)
@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         log.warning("telegram_bot_start_failed", error=str(exc))
 
-    log.info("aiden_api_starting", version="3.0.0", env=settings.ENV)
+    log.info("aiden_api_starting", version="3.1.0", env=settings.ENV)
     yield
 
     from src.core.scheduler import stop_scheduler
@@ -89,9 +89,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AIDEN v3.0 API",
-    description="AI Intelligent Daily Executive Navigator — 6 agents + 4 MCP servers",
-    version="3.0.0",
+    title="AIDEN v3.1 API",
+    description="AI Intelligent Daily Executive Navigator — 6 agents + 4 MCP servers + multimodal file upload",
+    version="3.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -183,7 +183,7 @@ async def health_check():
 
     return {
         "status": "ok",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "environment": settings.ENV,
         "agents": {
             "orchestrator": f"aiden_core ({settings.ORCHESTRATOR_MODEL})",
@@ -210,9 +210,14 @@ async def health_check():
 async def root():
     return {
         "name": "AIDEN v3.0 API",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "docs": "/docs",
         "health": "/health",
+        "new_in_v3.1": [
+            "Multimodal file upload (POST /chat/upload)",
+            "FileProcessor: image/audio/PDF/DOCX/XLSX → Gemini Parts",
+            "Telegram file upload via /chat/upload/sync",
+        ],
         "new_in_v3": [
             "4 MCP servers (Workspace, MongoDB, Notion, GitHub)",
             "NotionAgent sub-agent for team collaboration",

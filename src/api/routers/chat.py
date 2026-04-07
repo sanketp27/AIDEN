@@ -20,7 +20,7 @@ import json
 from typing import AsyncIterator
 
 import structlog
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -147,3 +147,117 @@ async def get_trace_history(
     except Exception as exc:
         log.warning("trace_history_failed", error=str(exc))
         return []
+
+
+MAX_FILE_SIZE_MB = 20
+MAX_FILE_BYTES   = MAX_FILE_SIZE_MB * 1024 * 1024
+
+ALLOWED_MIMES = {
+    # Images
+    "image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp",
+    # Audio
+    "audio/ogg", "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav",
+    "audio/m4a", "audio/mp4", "audio/webm", "audio/aac",
+    # Documents
+    "application/pdf",
+    "text/plain", "text/csv", "text/markdown",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/octet-stream",  # allow unknown — file_processor handles gracefully
+}
+
+
+async def _upload_event_stream(
+    file:         UploadFile,
+    message:      str,
+    user:         UserClaims,
+    session_id:   str | None,
+    http_request: Request,
+) -> AsyncIterator[str]:
+    file_bytes = await file.read()
+
+    if len(file_bytes) > MAX_FILE_BYTES:
+        yield _sse({"type": "error",
+                    "detail": f"File too large. Max size is {MAX_FILE_SIZE_MB} MB."})
+        return
+
+    async for payload in aiden_runner.run_with_trace_multimodal(
+        user_id    = user.user_id,
+        message    = message or "",
+        file_bytes = file_bytes,
+        mime_type  = file.content_type or "application/octet-stream",
+        filename   = file.filename or "upload",
+        session_id = session_id or None,
+    ):
+        if await http_request.is_disconnected():
+            log.info("upload_sse_client_disconnected", user_id=user.user_id)
+            break
+        yield _sse(payload)
+
+
+@router.post("/upload")
+async def chat_upload(
+    http_request: Request,
+    file:         UploadFile = File(...),
+    message:      str        = Form(default=""),
+    session_id:   str        = Form(default=""),
+    current_user: UserClaims = Depends(get_current_active_user),
+) -> StreamingResponse:
+    """
+    Multimodal SSE chat — accepts one file attachment plus an optional text message.
+
+    Supported file types: JPEG, PNG, WEBP, GIF, BMP (images), OGG, MP3, WAV,
+    M4A, WEBM (audio), PDF, TXT, CSV, DOCX, XLSX (documents).
+
+    The file and message are sent together to the AIDEN orchestrator which
+    automatically routes to the best agent (VisionAgent for images, VoiceAgent
+    for audio, or orchestrator-level analysis for documents).
+
+    Returns the same SSE event stream as /chat.
+    """
+    log.info("chat_upload_sse_start",
+             user_id=current_user.user_id,
+             filename=file.filename,
+             content_type=file.content_type,
+             message_length=len(message))
+
+    return StreamingResponse(
+        _upload_event_stream(file, message, current_user,
+                             session_id or None, http_request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":     "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection":        "keep-alive",
+        },
+    )
+
+
+@router.post("/upload/sync")
+async def chat_upload_sync(
+    file:         UploadFile = File(...),
+    message:      str        = Form(default=""),
+    session_id:   str        = Form(default=""),
+    current_user: UserClaims = Depends(get_current_active_user),
+) -> dict:
+    """
+    Non-streaming multimodal chat — used by Telegram bot and programmatic clients.
+    Returns the final response dict directly.
+    """
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_FILE_BYTES:
+        return {"success": False, "error": f"File too large. Max size is {MAX_FILE_SIZE_MB} MB."}
+
+    log.info("chat_upload_sync_start",
+             user_id=current_user.user_id,
+             filename=file.filename,
+             content_type=file.content_type)
+
+    return await aiden_runner.run_agent_multimodal(
+        user_id    = current_user.user_id,
+        message    = message or "",
+        file_bytes = file_bytes,
+        mime_type  = file.content_type or "application/octet-stream",
+        filename   = file.filename or "upload",
+        session_id = session_id or None,
+    )

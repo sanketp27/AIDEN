@@ -218,6 +218,33 @@ class AIDENClient:
         r.raise_for_status()
         return r.json()
 
+    async def chat_with_file(
+        self,
+        chat_id:    int,
+        file_bytes: bytes,
+        filename:   str,
+        mime_type:  str,
+        caption:    str = "",
+        session_id: str | None = None,
+    ) -> dict:
+        """
+        Send a file + optional caption to the AIDEN orchestrator via /chat/upload/sync.
+        The orchestrator automatically routes to the best agent based on file type.
+        """
+        headers = {k: v for k, v in self._h(chat_id).items() if k != "Content-Type"}
+        data    = {"message": caption or ""}
+        if session_id:
+            data["session_id"] = session_id
+        files = [("file", (filename, file_bytes, mime_type))]
+        r = await self._http.post(
+            f"{self._base}/chat/upload/sync",
+            headers=headers,
+            data=data,
+            files=files,
+        )
+        r.raise_for_status()
+        return r.json()
+
     async def close(self) -> None:
         await self._http.aclose()
 
@@ -311,7 +338,7 @@ HELP_TEXT = textwrap.dedent("""
 `/forecast`       — week workload forecast
 
 *Just type anything* — AIDEN routes it to the right agent 🧠
-Send a 🎤 voice note or 📷 photo too!
+📎 *Send any file* — photo, PDF, DOCX, XLSX, audio, CSV\n`/upload` — how to send files (supported types & tips)
 """).strip()
 
 
@@ -384,9 +411,6 @@ async def _call(bot, chat_id: int, coro, err: str = "Error"):
 
 # ── In-memory session cache (non-critical; lost on restart is acceptable) ─────
 _sessions: dict[int, str] = {}
-
-
-# ── Command handlers ──────────────────────────────────────────────────────────
 
 async def cmd_start(update, ctx) -> None:
     """/start — always show registration instructions."""
@@ -608,8 +632,6 @@ async def cmd_done(update, ctx) -> None:
         await _send(ctx.bot, chat_id, f"✅ Marked complete: *{task.get('title', args[0])}*")
 
 
-# ── Note commands ─────────────────────────────────────────────────────────────
-
 async def cmd_notes(update, ctx) -> None:
     chat_id = update.effective_chat.id
     if not await _get_registered_user(ctx.bot, chat_id):
@@ -657,8 +679,6 @@ async def cmd_search(update, ctx) -> None:
                 lines.append(f"📝 *{r['title']}*\n   _{preview}_\n")
             await _send(ctx.bot, chat_id, "\n".join(lines))
 
-
-# ── Calendar, Gmail, Intelligence ─────────────────────────────────────────────
 
 async def cmd_today(update, ctx) -> None:
     chat_id = update.effective_chat.id
@@ -708,8 +728,6 @@ async def cmd_forecast(update, ctx) -> None:
         await _send(ctx.bot, chat_id, f"📊 *Workload Forecast*\n\n{text}")
 
 
-# ── Message handlers ──────────────────────────────────────────────────────────
-
 async def on_text(update, ctx) -> None:
     """Route all plain-text messages through AIDEN orchestrator."""
     if not update.message or not update.message.text:
@@ -740,7 +758,7 @@ async def on_text(update, ctx) -> None:
 
 
 async def on_voice(update, ctx) -> None:
-    """Transcribe voice note and route through orchestrator."""
+    """Transcribe voice note and route through AIDEN orchestrator (unified upload path)."""
     if not update.message:
         return
     chat_id   = update.effective_chat.id
@@ -758,28 +776,41 @@ async def on_voice(update, ctx) -> None:
         tg_file = await ctx.bot.get_file(voice_obj.file_id)
         async with httpx.AsyncClient() as dl:
             resp = await dl.get(tg_file.file_path)
-        audio_b64 = base64.b64encode(resp.content).decode()
+        file_bytes = resp.content
+        # Telegram voice is OGG/Opus; audio files may vary
+        mime_type  = getattr(voice_obj, "mime_type", None) or "audio/ogg"
+        filename   = f"voice_{voice_obj.file_unique_id}.ogg"
     except Exception as exc:
         await _send(ctx.bot, chat_id, f"⚠️ Could not download voice note: {exc}")
         return
 
-    result = await _call(ctx.bot, chat_id,
-        _api.transcribe_and_run(chat_id, audio_b64), "Voice processing failed")
+    caption = update.message.caption or ""
+    result  = await _call(
+        ctx.bot, chat_id,
+        _api.chat_with_file(
+            chat_id, file_bytes, filename, mime_type,
+            caption=caption, session_id=_sessions.get(chat_id)
+        ),
+        "Voice processing failed",
+    )
     if not result:
         return
 
-    parts = []
-    if result.get("transcript"):
-        parts.append(f"📝 *Transcript:* _{result['transcript']}_")
-    if result.get("aiden_response"):
-        parts.append(result["aiden_response"])
-    if result.get("actions_taken"):
-        parts.append(f"_via {' · '.join(a.upper() for a in result['actions_taken'])}_")
-    await _send(ctx.bot, chat_id, "\n\n".join(parts) or "✅ Processed!")
+    _sessions[chat_id] = result.get("session_id") or _sessions.get(chat_id, "")
+    response = result.get("response", "✅ Voice note processed!")
+    agents   = result.get("agents_used", [])
+    reply    = _trunc(response)
+    if agents:
+        reply += f"\n\n_via {' · '.join(a.upper() for a in agents)}_"
+    await _send(ctx.bot, chat_id, reply)
 
 
 async def on_photo(update, ctx) -> None:
-    """Analyze photo/document with vision agent."""
+    """
+    Handle photo, image, or document sent to the bot.
+    Routes through the AIDEN orchestrator via /chat/upload/sync so ALL agents
+    can coordinate (VisionAgent for images, NoteKeeper to save, TaskMaster for action items).
+    """
     if not update.message:
         return
     chat_id = update.effective_chat.id
@@ -796,23 +827,93 @@ async def on_photo(update, ctx) -> None:
     caption = update.message.caption or ""
     await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
 
+    # Determine filename and MIME type
+    if photo:
+        filename  = f"photo_{photo.file_unique_id}.jpg"
+        mime_type = "image/jpeg"
+        type_icon = "📷"
+    else:
+        filename  = doc.file_name or f"document_{doc.file_unique_id}"
+        mime_type = doc.mime_type or "application/octet-stream"
+        type_icon = _file_icon(mime_type, filename)
+
+    await _send(ctx.bot, chat_id, f"{type_icon} Analyzing *{filename}*…")
+
     try:
         tg_file = await ctx.bot.get_file(target.file_id)
         async with httpx.AsyncClient() as dl:
             resp = await dl.get(tg_file.file_path)
-        image_b64 = base64.b64encode(resp.content).decode()
+        file_bytes = resp.content
     except Exception as exc:
-        await _send(ctx.bot, chat_id, f"⚠️ Could not download image: {exc}")
+        await _send(ctx.bot, chat_id, f"⚠️ Could not download file: {exc}")
         return
 
-    result = await _call(ctx.bot, chat_id,
-        _api.analyze_image(chat_id, image_b64, caption), "Vision analysis failed")
-    if result:
-        text = result.get("analysis") or result.get("response") or str(result)
-        await _send(ctx.bot, chat_id, f"👁️ *Vision Analysis*\n\n{text}")
+    result = await _call(
+        ctx.bot, chat_id,
+        _api.chat_with_file(
+            chat_id, file_bytes, filename, mime_type,
+            caption=caption, session_id=_sessions.get(chat_id)
+        ),
+        "File analysis failed",
+    )
+    if not result:
+        return
+
+    _sessions[chat_id] = result.get("session_id") or _sessions.get(chat_id, "")
+    response = result.get("response", "✅ File processed!")
+    agents   = result.get("agents_used", [])
+    reply    = _trunc(response)
+    if agents:
+        reply += f"\n\n_via {' · '.join(a.upper() for a in agents)}_"
+    await _send(ctx.bot, chat_id, reply)
 
 
-# ── Build and run ─────────────────────────────────────────────────────────────
+def _file_icon(mime_type: str, filename: str) -> str:
+    """Return an appropriate emoji for a file type."""
+    if mime_type.startswith("image/"):
+        return "🖼️"
+    if mime_type.startswith("audio/"):
+        return "🎵"
+    if mime_type == "application/pdf":
+        return "📄"
+    if filename.endswith(".docx") or filename.endswith(".doc"):
+        return "📝"
+    if filename.endswith(".xlsx") or filename.endswith(".csv"):
+        return "📊"
+    if filename.endswith(".txt") or mime_type.startswith("text/"):
+        return "📃"
+    return "📎"
+
+
+
+async def cmd_upload(update, ctx) -> None:
+    """/upload — explain how to send files to AIDEN via Telegram."""
+    chat_id = update.effective_chat.id
+    if not await _get_registered_user(ctx.bot, chat_id):
+        return
+    await _send(ctx.bot, chat_id,
+        "📎 *Sending files to AIDEN*\n\n"
+        "You can send any of these directly in this chat:\n\n"
+        "🖼️ *Images* (JPG, PNG, WEBP)\n"
+        "   → VisionAgent analyzes, extracts tasks & notes\n\n"
+        "🎵 *Voice / Audio* (OGG, MP3, WAV, M4A)\n"
+        "   → Transcribes speech, creates tasks from action items\n\n"
+        "📄 *PDF documents*\n"
+        "   → Reads & summarizes, extracts deadlines & decisions\n\n"
+        "📝 *Word documents* (.docx)\n"
+        "   → Extracts text, creates tasks from action items\n\n"
+        "📊 *Spreadsheets* (.xlsx, .csv)\n"
+        "   → Reads data, provides analysis & insights\n\n"
+        "📃 *Text files* (.txt, .md)\n"
+        "   → Reads content, suggests tasks & notes\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 *Tips:*\n"
+        "• Add a caption to your file for specific instructions\n"
+        "  _e.g. 'Extract action items' or 'Summarize this'_\n"
+        "• Max file size: *20 MB*\n"
+        "• Just drag and drop a file here — no special command needed!"
+    )
+
 
 def build_application():
     try:
@@ -824,6 +925,9 @@ def build_application():
         ) from exc
 
     app = Application.builder().token(bot_cfg.TELEGRAM_BOT_TOKEN).build()
+
+    # File upload guidance
+    app.add_handler(CommandHandler("upload",   cmd_upload))
 
     # Account (open to all — no registration check)
     app.add_handler(CommandHandler("start",    cmd_start))

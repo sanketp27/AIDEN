@@ -70,7 +70,7 @@ async def transcribe_audio_endpoint(
     return TranscriptResponse(
         transcript=result.get("transcript", ""),
         language=result.get("language_detected", language),
-        mode=result.get("mode", "GEMINI_2.5_FLASH_TTS"),
+        mode=result.get("mode", "GEMINI_2.5_FLASH_STT"),
         success=result.get("success", False),
         error=result.get("error")
     )
@@ -100,7 +100,7 @@ async def analyze_audio_endpoint(
         transcript=result.get("transcript", ""),
         intent=result.get("intent", "general_query"),
         details=result.get("details", {}),
-        mode=result.get("mode", "GEMINI_2.5_FLASH_TTS"),
+        mode=result.get("mode", "GEMINI_2.5_FLASH_STT"),
         success=result.get("success", False)
     )
 
