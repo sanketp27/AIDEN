@@ -135,3 +135,46 @@ class NotesRepository:
         """Count notes for a user"""
         collection = self._get_collection(user_id)
         return await collection.count_documents({"user_id": user_id})
+
+    async def text_search(self, user_id: str, query: str, limit: int = 20) -> list[Note]:
+        """
+        MongoDB regex text search fallback — used when ChromaDB collection
+        is empty (notes exist in Mongo but were never embedded in ChromaDB,
+        e.g. notes created before vector indexing was enabled).
+
+        Searches title + content + tags case-insensitively and scores by
+        number of query terms matched so results are approximately ranked.
+        """
+        collection = self._get_collection(user_id)
+
+        # Build per-term OR across title, content, tags
+        terms = [t.strip() for t in query.split() if t.strip()]
+        if not terms:
+            return []
+
+        term_conditions = []
+        for term in terms:
+            pattern = {"$regex": term, "$options": "i"}
+            term_conditions.append({
+                "$or": [
+                    {"title": pattern},
+                    {"content": pattern},
+                    {"tags": pattern},
+                    {"project": pattern},
+                ]
+            })
+
+        mongo_query = {
+            "user_id": user_id,
+            "$or": term_conditions,
+        }
+
+        cursor = collection.find(mongo_query).sort("created_at", -1).limit(limit)
+
+        notes = []
+        async for note_dict in cursor:
+            note_dict.pop("_id", None)
+            notes.append(Note(**note_dict))
+
+        log.info("text_search_fallback", user_id=user_id, query=query, count=len(notes))
+        return notes

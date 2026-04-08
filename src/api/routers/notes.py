@@ -63,17 +63,56 @@ async def search_notes(
 ):
     """
     Semantic search across notes using Gemini text-embedding-004 + ChromaDB.
+    Falls back to MongoDB regex search when ChromaDB collection is empty
+    (e.g. notes that pre-date vector indexing or when GOOGLE_API_KEY is absent).
     Returns results ranked by cosine similarity with a score in [0, 1].
     """
     if not q or len(q.strip()) < 2:
         raise HTTPException(status_code=400, detail="Query too short (min 2 chars)")
 
+    q_clean = q.strip()
+
     search_results = await vector_repo.semantic_search(
         user_id = current_user.user_id,
-        query   = q.strip(),
+        query   = q_clean,
         top_k   = top_k,
     )
 
+    # ── ChromaDB returned nothing — collection is empty or not yet indexed ──
+    # Fall back to MongoDB regex search so the user always gets results.
+    if not search_results:
+        log.info(
+            "search_chroma_empty_fallback_to_mongo",
+            user_id=current_user.user_id,
+            query=q_clean,
+        )
+        fallback_notes = await notes_repo.text_search(
+            user_id=current_user.user_id,
+            query=q_clean,
+            limit=top_k * 2,
+        )
+        result_list = []
+        for note in fallback_notes:
+            note_dict = note.model_dump() if hasattr(note, "model_dump") else dict(note)
+            note_dict["_score"] = None   # no semantic score for text-match results
+            note_dict["_model"] = "mongodb/regex"
+            result_list.append(note_dict)
+
+        log.info(
+            "semantic_search_response",
+            user_id=current_user.user_id,
+            query=q_clean,
+            results=len(result_list),
+            source="mongodb_fallback",
+        )
+        return {
+            "query":   q_clean,
+            "model":   "mongodb/regex (chroma collection empty — text fallback)",
+            "results": result_list,
+            "count":   len(result_list),
+        }
+
+    # ── Normal path: ChromaDB returned results ──────────────────────────────
     # Fetch full note objects from MongoDB in parallel
     note_ids = [r["document_id"] for r in search_results]
     notes    = await notes_repo.get_notes_by_ids(current_user.user_id, note_ids)
@@ -95,11 +134,12 @@ async def search_notes(
     log.info(
         "semantic_search_response",
         user_id = current_user.user_id,
-        query   = q,
+        query   = q_clean,
         results = len(result_list),
+        source  = "chromadb",
     )
     return {
-        "query":   q,
+        "query":   q_clean,
         "model":   "gemini/text-embedding-004",
         "results": result_list,
         "count":   len(result_list),

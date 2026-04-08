@@ -4191,7 +4191,9 @@ Be thorough — go through every email you find.`,
         return;
       }
       c.innerHTML = notes.map(n => {
-        const score = n._score != null ? `<span style="font-family:var(--font-mono);font-size:9px;color:var(--cyan);margin-left:auto" title="Semantic similarity">⚡${(n._score * 100).toFixed(0)}%</span>` : '';
+        const score = (n._score != null && n._score !== undefined)
+          ? `<span style="font-family:var(--font-mono);font-size:9px;color:var(--cyan);margin-left:auto" title="Semantic similarity">⚡${(n._score * 100).toFixed(0)}%</span>`
+          : (n._model === 'mongodb/regex' ? `<span style="font-family:var(--font-mono);font-size:9px;color:var(--amber);margin-left:auto" title="Text match">🔤 text</span>` : '');
         return `
     <div class="note-card">
       <div class="note-card-title">${escHtml(n.title || '')}</div>
