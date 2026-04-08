@@ -149,6 +149,28 @@ GITHUB ISSUE → TASK (dev users):
   Workspace MCP (block calendar time)
 
 ═══════════════════════════════════════════════════
+CALENDAR DISCONNECTED — TASK FALLBACK BEHAVIOUR
+═══════════════════════════════════════════════════
+
+When Workspace MCP is unreachable (timeout, connection refused, or no tools loaded):
+  1. DO NOT tell the user their tasks are unavailable.
+  2. IMMEDIATELY call TaskMaster → list_tasks (no filter) to fetch tasks from DB.
+  3. Present those tasks clearly, grouped by priority (P0 → P3).
+  4. Inform the user that calendar data is unavailable but their task list is current.
+  5. Offer to show overdue tasks separately: list_tasks(due_before=today).
+
+When user asks to "plan my week" and calendar is down:
+  TaskMaster: list_tasks(status="todo") → group by priority →
+  suggest time-blocks manually → NoteKeeper: save the plan as a note.
+
+When user asks about "today's schedule" and calendar is down:
+  TaskMaster: list_tasks(due_before=<today+1day>, status="todo") →
+  present as a prioritised daily agenda.
+
+NEVER respond with "I can't access your calendar" alone — always
+fall back to tasks from the database as a meaningful alternative.
+
+═══════════════════════════════════════════════════
 PROACTIVE SUGGESTIONS
 ═══════════════════════════════════════════════════
 
@@ -202,11 +224,13 @@ async def build_orchestrator(user: Any | None = None) -> Any:
 
     # Load MCP toolsets
     all_mcp_tools: list[Any] = []
+    _workspace_tool_count: int = 0
     if _MCP_LOADER_AVAILABLE and _settings is not None:
         try:
             loader = MCPLoader(_settings)
             loaded = await loader.load_all(user)
             all_mcp_tools = loaded.all_tools()
+            _workspace_tool_count = len(loaded.workspace)
             log.info("orchestrator.mcp_loaded", total=len(all_mcp_tools))
         except Exception as exc:
             log.warning("orchestrator.mcp_load_failed", error=str(exc))
@@ -227,6 +251,16 @@ async def build_orchestrator(user: Any | None = None) -> Any:
             log.info("orchestrator.notion_agent_added")
 
     instruction = ORCHESTRATOR_INSTRUCTION
+    # Inject real-time MCP connectivity status so the agent knows what's available
+    workspace_ok = _workspace_tool_count > 0
+    instruction += f"""
+
+═══════════════════════════════════════════════════
+CURRENT SESSION — MCP CONNECTIVITY STATUS
+═══════════════════════════════════════════════════
+Google Workspace MCP (Calendar/Gmail/Drive): {'CONNECTED ✓' if workspace_ok else 'OFFLINE ✗ — use TaskMaster DB fallback for tasks'}
+MongoDB MCP: {'CONNECTED ✓' if all_mcp_tools else 'OFFLINE'}
+"""
     if user and getattr(user, 'is_developer', False):
         instruction += _DEVELOPER_ADDON
 

@@ -1497,6 +1497,53 @@
       gap: 4px;
     }
 
+    /* ── TASK INLINE EDIT ROW ── */
+    .task-edit-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding-left: 30px;
+      flex-wrap: wrap;
+    }
+
+    .task-inline-select {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      border-radius: 4px;
+      padding: 3px 6px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    .task-inline-select:hover,
+    .task-inline-select:focus {
+      border-color: var(--cyan);
+      color: var(--text);
+    }
+
+    .task-delete-btn {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      background: var(--red-dim);
+      border: 1px solid rgba(252, 129, 129, 0.3);
+      color: var(--red);
+      border-radius: 4px;
+      padding: 3px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .task-delete-btn:hover {
+      background: var(--red);
+      color: var(--bg);
+    }
+
     .tag {
       background: var(--bg4);
       padding: 2px 8px;
@@ -2762,7 +2809,7 @@
               <div class="tasks-title">Notes</div>
               <div class="search-bar">
                 <span style="color:var(--text3)">🔍</span>
-                <input placeholder="Search notes..." id="notes-search" oninput="searchNotes(this.value)" />
+                <input placeholder="Search notes..." id="notes-search" oninput="debouncedSearchNotes(this.value)" />
               </div>
             </div>
             <div id="notes-cards-container" class="notes-cards">
@@ -3968,20 +4015,42 @@ Be thorough — go through every email you find.`,
         c.innerHTML = `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">No tasks</div><div class="empty-sub">Create your first task →</div></div>`;
         return;
       }
-      c.innerHTML = tasks.map(t => `
-    <div class="task-card ${t.status === 'completed' ? 'completed' : ''}" id="task-${t.task_id}">
+      c.innerHTML = tasks.map(t => {
+        const pri = (t.priority || 'P3').toUpperCase();
+        const sta = t.status || 'todo';
+        const isDone = sta === 'completed';
+        return `
+    <div class="task-card ${isDone ? 'completed' : ''}" id="task-${t.task_id}">
       <div class="task-top">
-        <div class="task-check ${t.status === 'completed' ? 'done' : ''}" onclick="toggleTask('${t.task_id}','${t.status}')">${t.status === 'completed' ? '✓' : ''}</div>
+        <div class="task-check ${isDone ? 'done' : ''}" onclick="toggleTask('${t.task_id}','${sta}')" title="Toggle complete">${isDone ? '✓' : ''}</div>
         <div class="task-title">${escHtml(t.title)}</div>
-        <span class="priority-badge ${t.priority.toLowerCase()}">${t.priority}</span>
+        <span class="priority-badge ${pri.toLowerCase()}">${pri}</span>
       </div>
       <div class="task-meta">
         ${t.due_date ? `<span class="task-meta-item">📅 ${new Date(t.due_date).toLocaleDateString()}</span>` : ''}
-        <span class="task-meta-item" style="color:${statusColor(t.status)}">${t.status.replace('_', ' ')}</span>
-        ${t.tags.slice(0, 3).map(tag => `<span class="tag">${escHtml(tag)}</span>`).join('')}
-        <span class="task-meta-item" style="margin-left:auto;cursor:pointer;color:var(--red)" onclick="deleteTask('${t.task_id}')">✕</span>
+        <span class="task-meta-item" style="color:${statusColor(sta)}">${sta.replace('_', ' ')}</span>
+        ${(t.tags || []).slice(0, 3).map(tag => `<span class="tag">${escHtml(tag)}</span>`).join('')}
+        <span class="task-meta-item" style="margin-left:auto"></span>
       </div>
-    </div>`).join('');
+      <div class="task-edit-row">
+        <label style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">PRIORITY</label>
+        <select class="task-inline-select" onchange="updateTaskField('${t.task_id}','priority',this.value)">
+          <option value="P0" ${pri === 'P0' ? 'selected' : ''}>P0 — Critical</option>
+          <option value="P1" ${pri === 'P1' ? 'selected' : ''}>P1 — High</option>
+          <option value="P2" ${pri === 'P2' ? 'selected' : ''}>P2 — Medium</option>
+          <option value="P3" ${pri === 'P3' ? 'selected' : ''}>P3 — Low</option>
+        </select>
+        <label style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">STATUS</label>
+        <select class="task-inline-select" onchange="updateTaskField('${t.task_id}','status',this.value)">
+          <option value="todo" ${sta === 'todo' ? 'selected' : ''}>To Do</option>
+          <option value="in_progress" ${sta === 'in_progress' ? 'selected' : ''}>In Progress</option>
+          <option value="completed" ${sta === 'completed' ? 'selected' : ''}>Completed</option>
+          <option value="cancelled" ${sta === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+        </select>
+        <button class="task-delete-btn" onclick="deleteTask('${t.task_id}')" title="Delete task">🗑 Delete</button>
+      </div>
+    </div>`;
+      }).join('');
     }
 
     function statusColor(s) {
@@ -4014,6 +4083,24 @@ Be thorough — go through every email you find.`,
         const r = await fetch(`${API}/tasks/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
         if (r.ok || r.status === 204) { loadTasks(true); showToast('Task deleted', 'success'); }
       } catch { }
+    }
+
+    async function updateTaskField(id, field, value) {
+      try {
+        const body = {};
+        body[field] = value;
+        const r = await fetch(`${API}/tasks/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body)
+        });
+        if (r.ok) {
+          showToast(`✓ Task ${field} updated`, 'success');
+          loadTasks(true);
+        } else {
+          showToast('Update failed', 'error');
+        }
+      } catch { showToast('Network error', 'error'); }
     }
 
     async function loadRecurring() {
@@ -4078,6 +4165,11 @@ Be thorough — go through every email you find.`,
     }
 
     // ─── NOTES ───────────────────────────────────────────────────────────
+    let _searchDebounceTimer = null;
+    function debouncedSearchNotes(query) {
+      clearTimeout(_searchDebounceTimer);
+      _searchDebounceTimer = setTimeout(() => searchNotes(query), 350);
+    }
     async function loadNotes(silent = false) {
       if (!token) return;
       if (!silent && !_guard('loadNotes')) return;
@@ -4094,30 +4186,51 @@ Be thorough — go through every email you find.`,
 
     function renderNotes(notes) {
       const c = document.getElementById('notes-cards-container');
-      if (!notes.length) {
-        c.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:40px 0"><div class="empty-icon">📝</div><div class="empty-title">No notes yet</div><div class="empty-sub">Create your first note →</div></div>`;
+      if (!notes || !notes.length) {
+        c.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:40px 0"><div class="empty-icon">📝</div><div class="empty-title">No notes found</div><div class="empty-sub">Try a different search or create a new note →</div></div>`;
         return;
       }
-      c.innerHTML = notes.map(n => `
+      c.innerHTML = notes.map(n => {
+        const score = n._score != null ? `<span style="font-family:var(--font-mono);font-size:9px;color:var(--cyan);margin-left:auto" title="Semantic similarity">⚡${(n._score * 100).toFixed(0)}%</span>` : '';
+        return `
     <div class="note-card">
-      <div class="note-card-title">${escHtml(n.title)}</div>
-      <div class="note-card-preview">${escHtml(n.content)}</div>
+      <div class="note-card-title">${escHtml(n.title || '')}</div>
+      <div class="note-card-preview">${escHtml(n.content || '')}</div>
       <div class="note-card-footer">
-        ${n.tags.slice(0, 3).map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}
+        ${(n.tags || []).slice(0, 3).map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}
         ${n.project ? `<span class="tag" style="color:var(--cyan);border-color:rgba(99,179,237,0.3)">${escHtml(n.project)}</span>` : ''}
         <span class="note-date">${new Date(n.created_at).toLocaleDateString()}</span>
+        ${score}
       </div>
-    </div>`).join('');
+    </div>`;
+      }).join('');
     }
 
     async function searchNotes(query) {
-      if (!query) { renderNotes(allNotes); return; }
+      if (!query || !query.trim()) { renderNotes(allNotes); return; }
+      if (!token) return;
       try {
-        const r = await fetch(`${API}/notes/search?q=${encodeURIComponent(query)}&limit=20`, {
+        const r = await fetch(`${API}/notes/search?q=${encodeURIComponent(query.trim())}&top_k=20`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (r.ok) { const d = await r.json(); renderNotes(d); }
-      } catch { renderNotes(allNotes.filter(n => n.title.toLowerCase().includes(query.toLowerCase()) || n.content.toLowerCase().includes(query.toLowerCase()))); }
+        if (r.ok) {
+          const d = await r.json();
+          // API returns { query, model, results: [...], count } — unwrap .results
+          const results = Array.isArray(d) ? d : (d.results || []);
+          renderNotes(results);
+        } else {
+          // fallback to client-side filter if semantic search fails
+          renderNotes(allNotes.filter(n =>
+            n.title.toLowerCase().includes(query.toLowerCase()) ||
+            n.content.toLowerCase().includes(query.toLowerCase())
+          ));
+        }
+      } catch {
+        renderNotes(allNotes.filter(n =>
+          n.title.toLowerCase().includes(query.toLowerCase()) ||
+          n.content.toLowerCase().includes(query.toLowerCase())
+        ));
+      }
     }
 
     async function createNote() {
