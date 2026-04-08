@@ -76,29 +76,14 @@ from typing import Optional
 
 import httpx
 import structlog
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from src.core.config import settings
 
 log = structlog.get_logger()
 
+bot_cfg = settings
+bot_settings = settings
 
-# ── Bot settings (read from .env) ─────────────────────────────────────────────
-
-class BotSettings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore",
-    )
-    TELEGRAM_BOT_TOKEN:    str = ""
-    TELEGRAM_BOT_USERNAME: str = ""
-    BOT_SERVICE_SECRET:    str = ""
-    AIDEN_API_URL:         str = "http://localhost:8000"
-
-
-bot_cfg = BotSettings()
-
-# ── Registration guard message — shown for every command before /register ─────
 
 _NOT_REGISTERED = (
     "👋 *Welcome to AIDEN!*\n\n"
