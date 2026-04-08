@@ -121,7 +121,7 @@ app = FastAPI(
 
 ALLOWED_ORIGINS = (
     [
-        "http://localhost:8501", "http://127.0.0.1:8501",
+        "https://project-aiden-27.web.app", "http://localhost:8501", "http://127.0.0.1:8501",
         "http://localhost:3000", "http://127.0.0.1:3000",
         "http://localhost:5173", "http://127.0.0.1:5173",
         "http://0.0.0.0:3000",  "http://0.0.0.0:8501",
@@ -133,12 +133,11 @@ ALLOWED_ORIGINS = (
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):

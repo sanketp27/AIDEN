@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir "google-workspace-mcp>=0.3.0" "fastmcp>=0.1.0"
+ENV MCP_HOST=0.0.0.0 MCP_PORT=8001 MCP_TRANSPORT=sse
+ENV GOOGLE_WORKSPACE_ENABLED_CAPABILITIES=calendar,gmail,drive,docs
+EXPOSE 8001
+HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+CMD ["python", "-m", "google_workspace_mcp"]

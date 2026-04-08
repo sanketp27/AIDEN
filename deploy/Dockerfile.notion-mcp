@@ -1,0 +1,8 @@
+FROM node:20-alpine
+WORKDIR /app
+RUN npm install --global @notionhq/notion-mcp-server && npm cache clean --force
+ENV MCP_TRANSPORT=sse MCP_PORT=8003
+EXPOSE 8003
+HEALTHCHECK --interval=20s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -qO- http://localhost:8003/health || exit 1
+CMD ["notion-mcp-server", "--port", "8003"]

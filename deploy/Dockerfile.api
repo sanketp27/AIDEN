@@ -3,32 +3,41 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    curl \
+    gcc curl \
+    libcairo2 libcairo2-dev \
+    libffi-dev \
+    libpangocairo-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies before copying source
+# Install dependencies
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e . && \
     pip install --no-cache-dir \
         gunicorn \
         "google-cloud-aiplatform>=1.60.0" \
-        "vertexai>=1.60.0"
+        "vertexai>=1.60.0" \
+        python-dotenv
 
+# Copy source
 COPY src/ ./src/
 
+# # ✅ IMPORTANT: copy .env into container
+# COPY .env .env
+
+# ✅ FIX: Use /tmp instead of GCS
 ENV CHROMA_PATH=/tmp/chroma
 
-ENV PORT=8080
+# Do NOT override PORT (Cloud Run provides it)
+
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -f http://localhost:8080/health || exit 1
 
 CMD exec gunicorn src.api.main:app \
     --worker-class uvicorn.workers.UvicornWorker \
     --workers 1 \
-    --bind "0.0.0.0:${PORT}" \
+    --bind "0.0.0.0:${PORT:-8080}" \
     --timeout 120 \
     --keep-alive 5 \
     --access-logfile - \
