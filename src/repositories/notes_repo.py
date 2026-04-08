@@ -113,7 +113,10 @@ class NotesRepository:
             {"$set": update_dict}
         )
 
-        if result.modified_count > 0:
+        # Return the note if it was modified OR if it already matched the update
+        # values (modified_count==0 but matchedCount==1 means a no-op update on
+        # an existing note — still a success, not a 404).
+        if result.matched_count > 0:
             log.info("note_updated", note_id=note_id, user_id=user_id)
             return await self.get_note(user_id, note_id)
 

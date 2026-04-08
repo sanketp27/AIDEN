@@ -26,17 +26,25 @@ async def create_note(
 
     note_dict = await notes_repo.create_note(note)
 
-    # Index in ChromaDB for semantic search
-    await vector_repo.add_embedding(
-        user_id=current_user.user_id,
-        document_id=note.note_id,
-        text=f"{note.title}\n{note.content}",
-        metadata={
-            "type": "note",
-            "tags": note.tags,
-            "project": note.project
-        }
-    )
+    # Index in ChromaDB for semantic search — non-fatal: note is already saved
+    # in MongoDB so a transient embedding failure must not roll back the create.
+    try:
+        await vector_repo.add_embedding(
+            user_id=current_user.user_id,
+            document_id=note.note_id,
+            text=f"{note.title}\n{note.content}",
+            metadata={
+                "type": "note",
+                "tags": note.tags,
+                "project": note.project
+            }
+        )
+    except Exception as embed_exc:
+        log.warning(
+            "note_embedding_failed_non_fatal",
+            note_id=note.note_id,
+            error=str(embed_exc),
+        )
 
     return Note(**note_dict)
 
@@ -67,8 +75,8 @@ async def search_notes(
     (e.g. notes that pre-date vector indexing or when GOOGLE_API_KEY is absent).
     Returns results ranked by cosine similarity with a score in [0, 1].
     """
-    if not q or len(q.strip()) < 2:
-        raise HTTPException(status_code=400, detail="Query too short (min 2 chars)")
+    if not q or len(q.strip()) < 1:
+        raise HTTPException(status_code=400, detail="Query must not be empty")
 
     q_clean = q.strip()
 
@@ -196,17 +204,24 @@ async def update_note(
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Update embedding in ChromaDB
-    await vector_repo.update_embedding(
-        user_id=current_user.user_id,
-        document_id=note.note_id,
-        text=f"{note.title}\n{note.content}",
-        metadata={
-            "type": "note",
-            "tags": note.tags,
-            "project": note.project
-        }
-    )
+    # Update embedding in ChromaDB — non-fatal, note is already updated in MongoDB.
+    try:
+        await vector_repo.update_embedding(
+            user_id=current_user.user_id,
+            document_id=note.note_id,
+            text=f"{note.title}\n{note.content}",
+            metadata={
+                "type": "note",
+                "tags": note.tags,
+                "project": note.project
+            }
+        )
+    except Exception as embed_exc:
+        log.warning(
+            "note_embedding_update_failed_non_fatal",
+            note_id=note.note_id,
+            error=str(embed_exc),
+        )
 
     return note
 

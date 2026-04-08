@@ -726,6 +726,120 @@
       border: 1px solid var(--border);
     }
 
+    /* ── MARKDOWN RENDERING ── */
+    .msg-bubble p {
+      margin: 0 0 6px 0;
+      line-height: 1.65;
+    }
+
+    .msg-bubble p:last-child {
+      margin-bottom: 0;
+    }
+
+    .msg-bubble .md-spacer {
+      height: 6px;
+    }
+
+    .msg-bubble strong {
+      font-weight: 600;
+      color: var(--cyan2);
+    }
+
+    .msg-bubble em {
+      font-style: italic;
+      color: var(--text);
+    }
+
+    .msg-bubble code {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--amber);
+    }
+
+    .msg-bubble pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .msg-bubble h1,
+    .msg-bubble h2,
+    .msg-bubble h3 {
+      font-family: var(--font-head);
+      color: var(--cyan);
+      margin: 10px 0 6px 0;
+      line-height: 1.3;
+    }
+
+    .msg-bubble h1 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .msg-bubble h2 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .msg-bubble h3 {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .msg-bubble ul,
+    .msg-bubble ol {
+      margin: 6px 0 6px 0;
+      padding-left: 18px;
+    }
+
+    .msg-bubble ul {
+      list-style: none;
+      padding-left: 4px;
+    }
+
+    .msg-bubble ul li {
+      position: relative;
+      padding-left: 14px;
+      margin-bottom: 4px;
+      line-height: 1.6;
+    }
+
+    .msg-bubble ul li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: var(--cyan);
+      font-size: 10px;
+      top: 3px;
+    }
+
+    .msg-bubble ol {
+      list-style: decimal;
+    }
+
+    .msg-bubble ol li {
+      margin-bottom: 4px;
+      line-height: 1.6;
+      padding-left: 4px;
+    }
+
+    .msg-bubble ol li::marker {
+      color: var(--cyan);
+      font-weight: 600;
+    }
+
+    .msg-bubble hr {
+      border: none;
+      border-top: 1px solid var(--border2);
+      margin: 10px 0;
+    }
+
     /* typing indicator */
     .typing-indicator {
       display: flex;
@@ -3917,12 +4031,104 @@ Be thorough — go through every email you find.`,
     }
 
     // ── APPEND MESSAGE ────────────────────────────────────────────────────────────
+    // ── MARKDOWN RENDERER ────────────────────────────────────────────────────────
+    function renderMarkdown(raw) {
+      if (!raw) return '';
+
+      let text = raw
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const codeBlocks = [];
+      text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push('<pre><code>' + code.trim() + '</code></pre>');
+        return '\x00CB' + idx + '\x00';
+      });
+
+      const inlineCodes = [];
+      text = text.replace(/`([^`\n]+)`/g, (_m, code) => {
+        const idx = inlineCodes.length;
+        inlineCodes.push('<code>' + code + '</code>');
+        return '\x00IC' + idx + '\x00';
+      });
+
+      function inlineFmt(s) {
+        s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        s = s.replace(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)/g, '<em>$1</em>');
+        s = s.replace(/(?<!_)_(?!\s)([^_\n]+?)(?<!\s)_(?!_)/g, '<em>$1</em>');
+        s = s.replace(/\x00IC(\d+)\x00/g, (_m, i) => inlineCodes[+i]);
+        return s;
+      }
+
+      const lines = text.split('\n');
+      const out = [];
+      let inUl = false, inOl = false;
+
+      const closeList = () => {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (inOl) { out.push('</ol>'); inOl = false; }
+      };
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (/\x00CB\d+\x00/.test(line)) {
+          closeList();
+          out.push(line.replace(/\x00CB(\d+)\x00/g, (_m, idx) => codeBlocks[+idx]));
+          continue;
+        }
+
+        const h3 = line.match(/^### (.+)$/);
+        if (h3) { closeList(); out.push('<h3>' + inlineFmt(h3[1]) + '</h3>'); continue; }
+        const h2 = line.match(/^## (.+)$/);
+        if (h2) { closeList(); out.push('<h2>' + inlineFmt(h2[1]) + '</h2>'); continue; }
+        const h1m = line.match(/^# (.+)$/);
+        if (h1m) { closeList(); out.push('<h1>' + inlineFmt(h1m[1]) + '</h1>'); continue; }
+
+        if (/^---+$/.test(line.trim())) { closeList(); out.push('<hr/>'); continue; }
+
+        const ul = line.match(/^[ \t]*[-*\u2022]\s+(.+)$/);
+        if (ul) {
+          if (inOl) { out.push('</ol>'); inOl = false; }
+          if (!inUl) { out.push('<ul>'); inUl = true; }
+          out.push('<li>' + inlineFmt(ul[1]) + '</li>');
+          continue;
+        }
+
+        const ol = line.match(/^[ \t]*\d+[.)]\s+(.+)$/);
+        if (ol) {
+          if (inUl) { out.push('</ul>'); inUl = false; }
+          if (!inOl) { out.push('<ol>'); inOl = true; }
+          out.push('<li>' + inlineFmt(ol[1]) + '</li>');
+          continue;
+        }
+
+        closeList();
+
+        if (line.trim() === '') {
+          out.push('<div class="md-spacer"></div>');
+        } else {
+          out.push('<p>' + inlineFmt(line) + '</p>');
+        }
+      }
+
+      closeList();
+      return out.join('');
+    }
+
+    // ── APPEND MESSAGE ────────────────────────────────────────────────────────────
     function appendMsg(role, text, agents, trace) {
       const wrap = document.getElementById('chat-messages');
       const isAI = role === 'ai';
-      const safeText = text
-        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
-        .replace(/\n/g, '<br/>');
+      const safeText = isAI ? renderMarkdown(text) : (
+        text
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br/>')
+      );
 
       const agentBadges = (agents || []).map(a =>
         `<span class="msg-agent-badge">${a.replace(/_/g, ' ').toUpperCase()}</span>`

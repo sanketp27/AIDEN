@@ -8,12 +8,14 @@ from typing import Any, Optional
 import chromadb
 import structlog
 from google import genai
+from google.genai import types
 
 from src.core.config import settings
 
 log = structlog.get_logger()
 
-EMBEDDING_MODEL = "text-embedding-004"
+EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_DIMS = 768
 _MAX_EMBED_RETRIES = 3
 _RETRY_BASE_DELAY_SECONDS = 0.5
 
@@ -30,10 +32,16 @@ def _get_client() -> chromadb.PersistentClient:
 
 
 def _get_google_api_key() -> str:
-    """Resolve the only supported embedding API key source."""
-    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    """Resolve the API key — prefer GEMINI_API_KEY, fall back to GOOGLE_API_KEY."""
+    # GEMINI_API_KEY is preferred; GOOGLE_API_KEY is the legacy alias.
+    api_key = (
+        os.getenv("GEMINI_API_KEY", "").strip()
+        or os.getenv("GOOGLE_API_KEY", "").strip()
+    )
     if not api_key:
-        raise RuntimeError("Missing GOOGLE_API_KEY environment variable")
+        raise RuntimeError(
+            "Missing API key: set GEMINI_API_KEY (or GOOGLE_API_KEY) in .env"
+        )
     return api_key
 
 
@@ -76,7 +84,10 @@ def _embed_with_retry(contents: list[str], task_type: str) -> list[list[float]]:
             response = client.models.embed_content(
                 model=EMBEDDING_MODEL,
                 contents=contents,
-                config={"task_type": task_type},
+                config=types.EmbedContentConfig(
+                    task_type=task_type,
+                    output_dimensionality=EMBEDDING_DIMS,
+                ),
             )
             return _extract_embeddings(response)
         except Exception as exc:
@@ -104,9 +115,9 @@ def _embed_with_retry(contents: list[str], task_type: str) -> list[list[float]]:
 
 async def _embed_documents(texts: list[str]) -> list[list[float]]:
     """
-    Embed one or more document texts using Google GenAI text-embedding-004.
+    Embed one or more document texts using gemini-embedding-001.
     Uses RETRIEVAL_DOCUMENT task_type for best indexing recall.
-    Returns a list of float vectors.
+    Returns a list of 768-dim float vectors.
     """
     validated = [_validate_text(text, "document text") for text in texts]
 
@@ -119,7 +130,7 @@ async def _embed_documents(texts: list[str]) -> list[list[float]]:
 
 async def _embed_query(query: str) -> list[float]:
     """
-    Embed a search query using Google GenAI text-embedding-004.
+    Embed a search query using gemini-embedding-001.
     Uses RETRIEVAL_QUERY task_type — optimised for search queries.
     """
     validated_query = _validate_text(query, "query")
@@ -134,7 +145,7 @@ async def _embed_query(query: str) -> list[float]:
 
 class VectorRepository:
     """
-    ChromaDB repository backed by Google GenAI text-embedding-004.
+    ChromaDB repository backed by Google GenAI gemini-embedding-001.
 
     Each user gets their own isolated collection (notes_{user_id}).
     embedding_function=None is always passed so ChromaDB never calls
