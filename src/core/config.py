@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # === Gmail OAuth ===
     GMAIL_CLIENT_ID:     str = ""
     GMAIL_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
     GMAIL_POLL_INTERVAL_MINUTES: int = 15
     GMAIL_MAX_EMAILS_PER_RUN:    int = 30
     GMAIL_MARK_READ_AFTER_TASK:  bool = True
@@ -94,6 +95,9 @@ class Settings(BaseSettings):
 
     # ── External service tokens (v3.0) ─────────────────────────────────────
     NOTION_TOKEN: Optional[str] = None   # Notion Integration Token
+    NOTION_CLIENT_ID: str = ""
+    NOTION_CLIENT_SECRET: str = ""
+    NOTION_REDIRECT_URI: str = "http://localhost:8000/auth/notion/callback"
     GITHUB_TOKEN: Optional[str] = None   # GitHub PAT (dev users fallback)
 
     # ── Legacy MCP URLs (kept for backward compat) ────────────────────────

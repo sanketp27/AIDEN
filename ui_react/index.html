@@ -305,6 +305,46 @@
       transform: scale(0.99);
     }
 
+    .connectors-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .connector-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .connector-card.is-connected { border-color: rgba(104, 211, 145, 0.45); }
+    .connector-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .connector-icon { font-size: 20px; }
+    .connector-name { font-family: var(--font-head); font-size: 14px; font-weight: 600; }
+    .connector-services { font-size: 11px; color: var(--text2); }
+    .status-pill { margin-left: auto; font-family: var(--font-mono); font-size: 10px; padding: 3px 8px; border-radius: 20px; background: var(--bg3); color: var(--text2); }
+    .status-pill.connected { background: var(--green-dim); color: var(--green); }
+    .connector-desc { font-size: 12px; color: var(--text2); margin: 6px 0 10px; }
+    .connector-account { font-size: 11px; color: var(--text2); margin-bottom: 10px; }
+    .connector-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .btn-secondary, .btn-danger-outline, .btn-telegram {
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 12px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--border2);
+      cursor: pointer;
+    }
+    .btn-secondary { background: var(--bg3); color: var(--text); }
+    .btn-danger-outline { background: transparent; color: var(--red); border-color: rgba(252, 129, 129, .4); }
+    .btn-telegram { background: #229ED9; color: #fff; border-color: #229ED9; }
+    .btn-telegram.btn-large { padding: 10px 16px; font-size: 14px; margin: 8px 0; }
+
     .auth-hint {
       font-family: var(--font-mono);
       font-size: 10px;
@@ -3592,97 +3632,7 @@
           style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:28px;letter-spacing:.1em">
           // INTEGRATIONS & PREFERENCES</div>
 
-        <!-- Gmail Card -->
-        <div
-          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-            <div style="font-size:22px;">📧</div>
-            <div>
-              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Gmail</div>
-              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Inbox monitoring &amp; task
-                extraction</div>
-            </div>
-            <div id="gmail-status-badge"
-              style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
-              NOT CONNECTED</div>
-          </div>
-          <div id="gmail-connected-info"
-            style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
-            Connected as: <span id="gmail-connected-email" style="color:var(--cyan)"></span>
-          </div>
-          <div style="display:flex;gap:10px;">
-            <button id="gmail-connect-btn" class="btn-primary"
-              style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;" onclick="connectGmail()">
-              Connect Gmail
-            </button>
-            <button id="gmail-disconnect-btn" class="btn-primary"
-              style="margin-top:0;display:none;width:auto;padding:10px 20px;font-size:12px;background:var(--red);color:#fff;"
-              onclick="disconnectGmail()">
-              Disconnect
-            </button>
-          </div>
-        </div>
-
-        <!-- Google Calendar Card -->
-        <div
-          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-            <div style="font-size:22px;">📅</div>
-            <div>
-              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Google Calendar</div>
-              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Read &amp; create events,
-                detect conflicts, find free slots</div>
-            </div>
-            <div id="cal-status-badge"
-              style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
-              NOT CONNECTED</div>
-          </div>
-          <div id="cal-connected-info"
-            style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
-            ✓ Calendar access granted
-          </div>
-          <div
-            style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:12px;line-height:1.6;">
-            Requires Google OAuth. Uses the same Google account as Gmail.<br />
-            Add <code style="color:var(--cyan)">https://www.googleapis.com/auth/calendar</code> to your OAuth client
-            scopes.
-          </div>
-          <div style="display:flex;gap:10px;">
-            <button id="cal-connect-btn" class="btn-primary"
-              style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;" onclick="connectCalendar()">
-              Connect Google Calendar
-            </button>
-            <button id="cal-disconnect-btn" class="btn-primary"
-              style="margin-top:0;display:none;width:auto;padding:10px 20px;font-size:12px;background:var(--red);color:#fff;"
-              onclick="disconnectCalendar()">
-              Disconnect
-            </button>
-          </div>
-        </div>
-
-        <!-- Telegram Card -->
-        <div
-          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-            <div style="font-size:22px;">✈️</div>
-            <div>
-              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Telegram Bot</div>
-              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Chat with AIDEN from
-                anywhere via Telegram</div>
-            </div>
-            <div id="tg-status-badge"
-              style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
-              NOT LINKED</div>
-          </div>
-          <div id="tg-connected-info"
-            style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
-            Linked · Chat ID: <span id="tg-chat-id" style="color:var(--cyan)"></span>
-          </div>
-          <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);line-height:1.6;">
-            Set <code style="color:var(--cyan)">TELEGRAM_BOT_TOKEN</code> in .env, then send
-            <code style="color:var(--cyan)">/start &lt;your-jwt-token&gt;</code> to your bot on Telegram.
-          </div>
-        </div>
+        <div id="connectors-grid" class="connectors-grid"></div>
 
         <!-- Account Info Card -->
         <div
@@ -4020,6 +3970,16 @@
         showToast('Calendar connection failed. Check your OAuth scopes.', 'error');
         window.history.replaceState({}, '', window.location.pathname);
       }
+      if (params.get('connected') === 'google_workspace') {
+        showToast('Google Workspace connected ✓', 'success');
+        window.history.replaceState({}, '', window.location.pathname);
+        renderConnectors();
+      }
+      if (params.get('connected') === 'notion') {
+        showToast('Notion connected ✓', 'success');
+        window.history.replaceState({}, '', window.location.pathname);
+        renderConnectors();
+      }
     }
 
     // ─── LOGOUT ──────────────────────────────────────────────────────────
@@ -4049,46 +4009,31 @@
     }
 
     // ─── INTEGRATIONS ─────────────────────────────────────────────────────
+    async function apiFetch(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`${API}${path}`, { ...options, headers });
+      if (!res.ok) {
+        let detail = `Request failed (${res.status})`;
+        try {
+          const data = await res.json();
+          detail = data?.detail || detail;
+        } catch { }
+        throw new Error(detail);
+      }
+      return res.json();
+    }
+
     async function loadMe() {
       if (!token) return;
       try {
-        const r = await fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!r.ok) return;
-        const data = await r.json();
+        const data = await apiFetch('/auth/me');
         _applyIntegrationsUI(data);
       } catch { }
     }
 
     function _applyIntegrationsUI(data) {
-      // ── Gmail ──
-      const gmail = data?.integrations?.gmail;
-      if (gmail) {
-        const connected = gmail.connected;
-        _setIntegrationBadge('gmail-status-badge', connected, 'CONNECTED', 'NOT CONNECTED');
-        _el('gmail-connected-info', el => el.style.display = connected ? '' : 'none');
-        _el('gmail-connected-email', el => el.textContent = gmail.connected_email || '');
-        _el('gmail-connect-btn', el => el.style.display = connected ? 'none' : '');
-        _el('gmail-disconnect-btn', el => el.style.display = connected ? '' : 'none');
-      }
-
-      // ── Google Calendar ──
-      const cal = data?.integrations?.calendar;
-      if (cal !== undefined) {
-        const connected = !!cal?.connected;
-        _setIntegrationBadge('cal-status-badge', connected, 'CONNECTED', 'NOT CONNECTED');
-        _el('cal-connected-info', el => el.style.display = connected ? '' : 'none');
-        _el('cal-connect-btn', el => el.style.display = connected ? 'none' : '');
-        _el('cal-disconnect-btn', el => el.style.display = connected ? '' : 'none');
-      }
-
-      // ── Telegram ──
-      const tg = data?.integrations?.telegram;
-      if (tg) {
-        const linked = tg.connected;
-        _setIntegrationBadge('tg-status-badge', linked, 'LINKED', 'NOT LINKED');
-        _el('tg-connected-info', el => el.style.display = linked ? '' : 'none');
-        _el('tg-chat-id', el => el.textContent = tg.chat_id || '');
-      }
+      renderConnectors();
     }
 
     function _el(id, fn) { const el = document.getElementById(id); if (el) fn(el); }
@@ -4102,37 +4047,68 @@
       el.style.background = connected ? 'var(--green-dim)' : 'transparent';
     }
 
-    async function connectGmail() {
-      if (!token) return showToast('Please log in first', 'error');
-      window.location.href = `${API}/auth/gmail?bearer=${encodeURIComponent(token)}`;
-    }
-
-    async function disconnectGmail() {
-      if (!token) return;
+    async function renderConnectors() {
+      const container = document.getElementById('connectors-grid');
+      if (!container || !token) return;
       try {
-        const r = await fetch(`${API}/auth/gmail`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (r.ok) { showToast('Gmail disconnected', 'success'); loadMe(); }
-        else showToast('Failed to disconnect Gmail', 'error');
-      } catch { showToast('Network error', 'error'); }
+        const { connectors } = await apiFetch('/settings/connectors');
+        const icons = { google: '🔵', notion: '⬛', telegram: '✈️', github: '🐙' };
+        container.innerHTML = connectors.map(c => `
+          <div class="connector-card ${c.connected ? 'is-connected' : ''}">
+            <div class="connector-header">
+              <span class="connector-icon">${icons[c.icon] || '🔗'}</span>
+              <div class="connector-meta">
+                <div class="connector-name">${c.name}</div>
+                <div class="connector-services">${(c.services || []).join(' · ')}</div>
+              </div>
+              <span class="status-pill ${c.connected ? 'connected' : ''}">${c.connected ? '● Connected' : 'Not connected'}</span>
+            </div>
+            <div class="connector-desc">${c.description || ''}</div>
+            ${c.connected && c.connected_email ? `<div class="connector-account">Connected as <strong>${c.connected_email}</strong></div>` : ''}
+            ${c.connected && c.connected_workspace ? `<div class="connector-account">Workspace: <strong>${c.connected_workspace}</strong></div>` : ''}
+            <div class="connector-actions">
+              ${c.id === 'telegram' ? renderTelegramActions(c) : ''}
+              ${c.id === 'github' && c.requires_developer_mode ? `<a href="${c.setup_url}" class="btn-secondary">Enable Developer Mode</a>` : ''}
+              ${c.oauth_url && !c.connected ? `<a href="${API}${c.oauth_url}" class="btn-primary" style="width:auto;margin:0;padding:7px 12px;font-size:12px;">Connect ${c.name}</a>` : ''}
+              ${c.connected && c.id !== 'telegram' && c.id !== 'github' ? `<button onclick="disconnectConnector('${c.id}')" class="btn-danger-outline">Disconnect</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch {
+        container.innerHTML = `<div class="empty-state"><div class="empty-title">Could not load connectors</div></div>`;
+      }
     }
 
-    async function connectCalendar() {
-      if (!token) return showToast('Please log in first', 'error');
-      window.location.href = `${API}/auth/calendar?bearer=${encodeURIComponent(token)}`;
+    function renderTelegramActions(connector) {
+      if (connector.connected) {
+        return `
+          <a href="https://t.me/Aiden_v4_bot" target="_blank" class="btn-telegram">
+            💬 Chat with AIDEN on Telegram
+          </a>
+        `;
+      }
+      return `
+        <a href="https://t.me/Aiden_v4_bot" target="_blank" class="btn-telegram">✈️ Connect via @Aiden_v4_bot</a>
+        <button onclick="getTelegramLinkCode()" class="btn-secondary">Link existing account</button>
+      `;
     }
 
-    async function disconnectCalendar() {
-      if (!token) return;
+    async function getTelegramLinkCode() {
       try {
-        const r = await fetch(`${API}/auth/calendar`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (r.ok) { showToast('Google Calendar disconnected', 'success'); loadMe(); }
-        else showToast('Failed to disconnect Calendar', 'error');
+        const data = await apiFetch('/settings/telegram/link-code');
+        window.open(data.deep_link, '_blank');
+        showToast(`Telegram link generated (expires in ${data.expires_in_minutes} min)`, 'success');
+      } catch {
+        showToast('Failed to generate Telegram link code', 'error');
+      }
+    }
+
+    async function disconnectConnector(id) {
+      if (!confirm(`Disconnect ${id}? You can reconnect at any time.`)) return;
+      try {
+        await apiFetch(`/settings/connectors/${id}`, { method: 'DELETE' });
+        showToast('Connector disconnected', 'success');
+        renderConnectors();
       } catch { showToast('Network error', 'error'); }
     }
 

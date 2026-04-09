@@ -61,6 +61,14 @@ class UserRepository:
         doc.pop("_id", None)
         return User(**doc)
 
+    async def get_user(self, user_id: str) -> dict:
+        """Return raw user document as a dict (empty dict when not found)."""
+        doc = await self._users.find_one({"user_id": user_id})
+        if not doc:
+            return {}
+        doc.pop("_id", None)
+        return doc
+
     async def get_by_email(self, email: str) -> Optional[User]:
         doc = await self._users.find_one({"email": email})
         if not doc:
@@ -126,6 +134,36 @@ class UserRepository:
         )
         log.info("jwt_tokens_revoked", user_id=user_id, count=result.modified_count)
         return result.modified_count
+
+    async def update(self, user_id: str, update_fields: dict) -> bool:
+        """Update fields on a user document."""
+        if not update_fields:
+            return False
+        payload = dict(update_fields)
+        payload["updated_at"] = datetime.now(timezone.utc)
+        res = await self._users.update_one(
+            {"user_id": user_id},
+            {"$set": payload},
+        )
+        return res.modified_count > 0
+
+    async def update_user(self, user_id: str, update_fields: dict) -> bool:
+        """Alias for update(), kept for router compatibility."""
+        return await self.update(user_id, update_fields)
+
+    async def clear_fields(self, user_id: str, fields: list[str]) -> bool:
+        """Unset a list of fields for the user."""
+        if not fields:
+            return False
+        unset_payload = {f: "" for f in fields}
+        res = await self._users.update_one(
+            {"user_id": user_id},
+            {
+                "$unset": unset_payload,
+                "$set": {"updated_at": datetime.now(timezone.utc)},
+            },
+        )
+        return res.modified_count > 0
 
 
     async def get_by_telegram_chat_id(self, chat_id: int) -> Optional[User]:
