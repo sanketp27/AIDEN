@@ -15,6 +15,8 @@ from src.api.routers import (
     habits, forecast, briefing, gmail, auth, preferences, sessions, demo
 )
 from src.api.routers.developer_settings import router as dev_settings_router
+from src.api.routers.settings import router as settings_router
+from src.api.routers.connectors import router as connectors_router
 from src.core.config import settings
 import logging
 import structlog
@@ -179,6 +181,8 @@ app.include_router(preferences.router)
 app.include_router(sessions.router)
 app.include_router(demo.router)
 app.include_router(dev_settings_router)   # NEW in v3.0
+app.include_router(settings_router)
+app.include_router(connectors_router)
 
 
 @app.get("/health", tags=["System"])

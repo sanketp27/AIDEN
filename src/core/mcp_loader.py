@@ -17,11 +17,13 @@ Usage inside runner.py / orchestrator.py:
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
+from cryptography.fernet import Fernet
 
 log = structlog.get_logger()
 
@@ -74,9 +76,9 @@ class MCPLoader:
         GitHub tools only load when user.is_developer is True.
         """
         results = await asyncio.gather(
-            self._get_workspace_tools(),
+            self._get_workspace_tools(user),
             self._get_mongodb_tools(),
-            self._get_notion_tools(),
+            self._get_notion_tools(user),
             self._get_github_tools(user),
             return_exceptions=True,
         )
@@ -97,18 +99,23 @@ class MCPLoader:
         return loaded
 
 
-    async def _get_workspace_tools(self) -> list[Any]:
-        if self._cached_workspace is not None:
-            return self._cached_workspace
-
+    async def _get_workspace_tools(self, user: Any | None) -> list[Any]:
         cfg = MCPServerConfig(
             name="google-workspace-mcp",
             url=f"http://localhost:{getattr(self._settings, 'WORKSPACE_MCP_PORT', 8001)}/mcp",
             enabled=getattr(self._settings, 'WORKSPACE_MCP_ENABLED', True),
         )
-        tools = await self._load_from_server(cfg)
-        self._cached_workspace = tools
-        return tools
+        headers: dict[str, str] = {}
+        if user is not None:
+            access_token = self._safe_get(user, "google_access_token")
+            user_id = self._safe_get(user, "user_id")
+            if not access_token:
+                log.info("mcp_loader.workspace_skipped", reason="google_access_token not set")
+                return []
+            headers["X-User-Access-Token"] = access_token
+            if user_id:
+                headers["X-User-Id"] = str(user_id)
+        return await self._load_from_server(cfg, headers=headers)
 
     async def _get_mongodb_tools(self) -> list[Any]:
         if self._cached_mongodb is not None:
@@ -123,13 +130,17 @@ class MCPLoader:
         self._cached_mongodb = tools
         return tools
 
-    async def _get_notion_tools(self) -> list[Any]:
-        if self._cached_notion is not None:
-            return self._cached_notion
-
+    async def _get_notion_tools(self, user: Any | None) -> list[Any]:
         notion_token = getattr(self._settings, 'NOTION_TOKEN', None)
+        encrypted_token = self._safe_get(user, "notion_token_encrypted") if user else None
+        if encrypted_token:
+            try:
+                notion_token = self._decrypt_user_token(encrypted_token)
+            except Exception as exc:
+                log.warning("mcp_loader.notion_token_decrypt_failed", error=str(exc))
+                return []
         if not notion_token:
-            log.info("mcp_loader.notion_skipped", reason="NOTION_TOKEN not configured")
+            log.info("mcp_loader.notion_skipped", reason="no notion token available")
             return []
 
         cfg = MCPServerConfig(
@@ -137,9 +148,7 @@ class MCPLoader:
             url=f"http://localhost:{getattr(self._settings, 'NOTION_MCP_PORT', 8003)}/mcp",
             enabled=getattr(self._settings, 'NOTION_MCP_ENABLED', True),
         )
-        tools = await self._load_from_server(cfg)
-        self._cached_notion = tools
-        return tools
+        return await self._load_from_server(cfg, headers={"Authorization": f"Bearer {notion_token}"})
 
     async def _get_github_tools(self, user: Any | None) -> list[Any]:
         """Only load for developer users who have a github_token configured."""
@@ -160,7 +169,7 @@ class MCPLoader:
         )
         return await self._load_from_server(cfg)
 
-    async def _load_from_server(self, cfg: MCPServerConfig) -> list[Any]:
+    async def _load_from_server(self, cfg: MCPServerConfig, headers: dict[str, str] | None = None) -> list[Any]:
         if not cfg.enabled:
             log.info("mcp_loader.server_disabled", server=cfg.name)
             return []
@@ -169,12 +178,11 @@ class MCPLoader:
             return []
 
         try:
-            tools, _exit_stack = await asyncio.wait_for(
-                MCPToolset.from_server(
-                    connection_params=SseServerParams(url=cfg.url)
-                ),
-                timeout=10.0,
-            )
+            kwargs: dict[str, Any] = {"connection_params": SseServerParams(url=cfg.url)}
+            if headers:
+                kwargs["headers"] = headers
+
+            tools, _exit_stack = await asyncio.wait_for(MCPToolset.from_server(**kwargs), timeout=10.0)
             log.info("mcp_loader.server_connected",
                      server=cfg.name, tools=len(tools))
             return tools or []
@@ -191,3 +199,15 @@ class MCPLoader:
             if cfg.required:
                 raise
             return []
+
+    @staticmethod
+    def _safe_get(user: Any | None, key: str, default: Any = None) -> Any:
+        if user is None:
+            return default
+        if isinstance(user, dict):
+            return user.get(key, default)
+        return getattr(user, key, default)
+
+    def _decrypt_user_token(self, encrypted: str) -> str:
+        key = base64.urlsafe_b64encode(self._settings.JWT_SECRET[:32].ljust(32).encode())
+        return Fernet(key).decrypt(encrypted.encode()).decode()

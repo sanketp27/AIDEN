@@ -222,13 +222,23 @@ async def build_orchestrator(user: Any | None = None) -> Any:
     if not _ADK_AVAILABLE:
         raise ImportError("google-adk is not installed")
 
+    user_for_mcp = user
+    if user is not None and not isinstance(user, dict) and not getattr(user, "google_access_token", None):
+        try:
+            from src.repositories.user_repo import user_repo
+            full_user = await user_repo.get_user(getattr(user, "user_id", ""))
+            if full_user:
+                user_for_mcp = full_user
+        except Exception as exc:
+            log.warning("orchestrator.user_profile_lookup_failed", error=str(exc))
+
     # Load MCP toolsets
     all_mcp_tools: list[Any] = []
     _workspace_tool_count: int = 0
     if _MCP_LOADER_AVAILABLE and _settings is not None:
         try:
             loader = MCPLoader(_settings)
-            loaded = await loader.load_all(user)
+            loaded = await loader.load_all(user_for_mcp)
             all_mcp_tools = loaded.all_tools()
             _workspace_tool_count = len(loaded.workspace)
             log.info("orchestrator.mcp_loaded", total=len(all_mcp_tools))

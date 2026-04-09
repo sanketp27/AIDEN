@@ -25,15 +25,21 @@ Gmail OAuth
 """
 from __future__ import annotations
 
+import base64
+import secrets
 import time
 from urllib.parse import urlencode
 
 import httpx
+import requests
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from jose import jwt
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from datetime import datetime, timezone, timedelta
+from cryptography.fernet import Fernet
 
 from src.api.middleware import get_current_active_user
 from src.core.config import settings
@@ -52,6 +58,23 @@ from src.models.user_prefs import UserPreferencesUpdate
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+GOOGLE_WORKSPACE_SCOPES = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/tasks",
+    "openid",
+    "email",
+    "profile",
+]
+NOTION_AUTH_URL = "https://api.notion.com/v1/oauth/authorize"
+NOTION_TOKEN_URL = "https://api.notion.com/v1/oauth/token"
+
+
+def _fernet_encrypt(text: str) -> str:
+    key = base64.urlsafe_b64encode(settings.JWT_SECRET[:32].ljust(32).encode())
+    return Fernet(key).encrypt(text.encode()).decode()
 
 class RegisterRequest(BaseModel):
     name: str
@@ -465,3 +488,139 @@ async def calendar_disconnect(
     await cred_store.delete(current_user.user_id, "calendar")
     log.info("calendar_disconnected", user_id=current_user.user_id)
     return {"status": "disconnected", "user_id": current_user.user_id}
+
+
+@router.get("/google/start")
+async def google_oauth_start(current_user: UserClaims = Depends(get_current_active_user)):
+    """Initiate unified Google Workspace OAuth flow."""
+    state = jwt.encode(
+        {
+            "user_id": current_user.user_id,
+            "exp": datetime.utcnow() + timedelta(minutes=10),
+            "nonce": secrets.token_urlsafe(8),
+        },
+        settings.JWT_SECRET,
+        algorithm="HS256",
+    )
+    params = urlencode(
+        {
+            "client_id": settings.GMAIL_CLIENT_ID,
+            "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": " ".join(GOOGLE_WORKSPACE_SCOPES),
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": state,
+        }
+    )
+    return RedirectResponse(url=f"https://accounts.google.com/o/oauth2/auth?{params}")
+
+
+@router.get("/google/callback")
+async def google_oauth_callback(code: str, state: str):
+    """Handle Google OAuth callback and persist per-user tokens."""
+    try:
+        payload = jwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
+        user_id = payload["user_id"]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state — please try again")
+
+    token_resp = requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "code": code,
+            "client_id": settings.GMAIL_CLIENT_ID,
+            "client_secret": settings.GMAIL_CLIENT_SECRET,
+            "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+            "grant_type": "authorization_code",
+        },
+        timeout=20,
+    )
+    if not token_resp.ok:
+        raise HTTPException(status_code=400, detail="Token exchange failed")
+    tokens = token_resp.json()
+
+    userinfo_resp = requests.get(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        timeout=20,
+    )
+    userinfo = userinfo_resp.json() if userinfo_resp.ok else {}
+
+    await user_repo.update_user(
+        user_id,
+        {
+            "google_access_token": tokens["access_token"],
+            "google_refresh_token": tokens.get("refresh_token"),
+            "google_email": userinfo.get("email", ""),
+            "calendar_connected": True,
+            "gmail_connected": True,
+            "google_connected_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    ui_base = settings.AIDEN_UI_URL.rstrip("/")
+    return RedirectResponse(url=f"{ui_base}/?connected=google_workspace")
+
+
+@router.get("/notion/start")
+async def notion_oauth_start(current_user: UserClaims = Depends(get_current_active_user)):
+    """Initiate Notion OAuth2 flow."""
+    state = jwt.encode(
+        {
+            "user_id": current_user.user_id,
+            "exp": datetime.utcnow() + timedelta(minutes=10),
+        },
+        settings.JWT_SECRET,
+        algorithm="HS256",
+    )
+    params = urlencode(
+        {
+            "client_id": settings.NOTION_CLIENT_ID,
+            "response_type": "code",
+            "owner": "user",
+            "redirect_uri": settings.NOTION_REDIRECT_URI,
+            "state": state,
+        }
+    )
+    return RedirectResponse(url=f"{NOTION_AUTH_URL}?{params}")
+
+
+@router.get("/notion/callback")
+async def notion_oauth_callback(code: str, state: str):
+    """Exchange Notion code for a token and store it per user."""
+    try:
+        payload = jwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
+        user_id = payload["user_id"]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid state")
+
+    resp = requests.post(
+        NOTION_TOKEN_URL,
+        auth=(settings.NOTION_CLIENT_ID, settings.NOTION_CLIENT_SECRET),
+        json={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": settings.NOTION_REDIRECT_URI,
+        },
+        timeout=20,
+    )
+    if not resp.ok:
+        raise HTTPException(status_code=400, detail="Notion token exchange failed")
+    data = resp.json()
+    access_token = data.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Notion access token missing")
+
+    encrypted = _fernet_encrypt(access_token)
+    await user_repo.update_user(
+        user_id,
+        {
+            "notion_token_encrypted": encrypted,
+            "notion_workspace_name": data.get("workspace_name", ""),
+            "notion_workspace_id": data.get("workspace_id", ""),
+            "notion_connected": True,
+            "notion_connected_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    ui_base = settings.AIDEN_UI_URL.rstrip("/")
+    return RedirectResponse(url=f"{ui_base}/?connected=notion")
