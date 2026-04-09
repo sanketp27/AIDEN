@@ -333,3 +333,53 @@ Respond as valid JSON:
             "text": "Analysis failed",
             "message": "Could not extract structured data from image",
         }
+
+@tool
+async def extract_tasks_from_image(image_b64: str) -> dict:
+    """
+    Extract actionable tasks from any image (whiteboard, handwritten notes, document, slide).
+
+    Combines classification + targeted extraction in a single call optimised
+    for task creation. Returns a list of tasks ready to be inserted via TaskMaster.
+
+    Args:
+        image_b64: Base64-encoded image
+
+    Returns:
+        Dictionary with 'tasks' list and 'raw_text' transcription
+    """
+    try:
+        model = genai.GenerativeModel(settings.VISION_MODEL)
+
+        image_bytes, mime_type = _decode_image_input(image_b64)
+        image = load_image(image_bytes, mime_type=mime_type)
+
+        prompt = """Extract ALL actionable tasks from this image.
+Look for: checkboxes, bullet points, numbered lists, action verbs (Review, Send, Fix, Complete, Schedule), deadlines, and any to-do items.
+
+Respond ONLY with valid JSON (no markdown):
+{
+  "tasks": [
+    {
+      "title": "<short task title>",
+      "description": "<additional context if any>",
+      "priority": "P1|P2|P3",
+      "due_date": "<YYYY-MM-DD or null>",
+      "assignee": "<person name or null>"
+    }
+  ],
+  "raw_text": "<full transcription of all visible text>"
+}"""
+
+        response = await asyncio.to_thread(model.generate_content, [prompt, image])
+        result = _parse_json_response(response.text)
+
+        log.info("tasks_extracted_from_image", task_count=len(result.get("tasks", [])))
+        return result
+
+    except ValueError as exc:
+        log.warning("extract_tasks_validation_failed", error=str(exc))
+        return {"tasks": [], "raw_text": "", "error": str(exc)}
+    except Exception as exc:
+        log.error("extract_tasks_from_image_failed", error=str(exc), exc_info=True)
+        return {"tasks": [], "raw_text": "", "error": str(exc)}

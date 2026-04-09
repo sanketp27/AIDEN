@@ -1,0 +1,197 @@
+# deploy/service.yaml
+#
+# Cloud Run multi-container service spec for AIDEN v3.1
+# -------------------------------------------------------
+# Placeholders replaced at deploy time by deploy.sh:
+#   PROJECT_ID   REGION   REPO   CHROMA_BUCKET
+#
+# Architecture:
+#   • aiden-api       port 8080  — public entrypoint (FastAPI)
+#   • workspace-mcp   port 8001  — localhost sidecar (Google Workspace)
+#   • mongodb-mcp     port 8002  — localhost sidecar (MongoDB read-only)
+#   • notion-mcp      port 8003  — localhost sidecar (Notion team wiki)
+#
+# All 4 containers share localhost — MCPLoader connects with zero code changes.
+# Only port 8080 is publicly accessible.
+#
+# GCS Volume mounts at /mnt/gcs/chroma — ChromaDB persists across cold starts.
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aiden-api
+  labels:
+    cloud.googleapis.com/location: REGION
+  annotations:
+    run.googleapis.com/launch-stage: GA
+
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "5"
+        run.googleapis.com/execution-environment: gen2
+        # GCS Fuse mount requires gen2 execution environment
+        run.googleapis.com/volumes: >
+          [{"name":"chroma-gcs","csi":{"driver":"gcsfuse.run.googleapis.com","volumeAttributes":{"bucketName":"CHROMA_BUCKET","mountOptions":"implicit-dirs,file-mode=0777,dir-mode=0777"}}}]
+
+    spec:
+      timeoutSeconds: 120
+      containerConcurrency: 80
+
+      volumes:
+        - name: chroma-gcs
+          csi:
+            driver: gcsfuse.run.googleapis.com
+            readOnly: false
+            volumeAttributes:
+              bucketName: CHROMA_BUCKET
+              mountOptions: "implicit-dirs,file-mode=0777,dir-mode=0777"
+
+      containers:
+
+        # ── 1. Main API ──────────────────────────────────────────────────────
+        - name: aiden-api
+          image: REGION-docker.pkg.dev/PROJECT_ID/REPO/api:latest
+          ports:
+            - name: http1
+              containerPort: 8080
+          resources:
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          volumeMounts:
+            - name: chroma-gcs
+              mountPath: /mnt/gcs/chroma
+          env:
+            - name: ENV
+              value: "production"
+            - name: DEBUG
+              value: "false"
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "PROJECT_ID"
+            - name: GOOGLE_CLOUD_LOCATION
+              value: "REGION"
+            - name: GOOGLE_GENAI_USE_VERTEXAI
+              value: "1"
+            - name: CHROMA_PATH
+              value: "/mnt/gcs/chroma"
+            - name: MONGO_DB
+              value: "aiden"
+            - name: WORKSPACE_MCP_PORT
+              value: "8001"
+            - name: MONGO_MCP_PORT
+              value: "8002"
+            - name: NOTION_MCP_PORT
+              value: "8003"
+            - name: WORKSPACE_MCP_ENABLED
+              value: "true"
+            - name: MONGO_MCP_ENABLED
+              value: "true"
+            - name: NOTION_MCP_ENABLED
+              value: "true"
+            - name: GITHUB_MCP_ENABLED
+              value: "false"
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_MONGO_URI
+                  key: latest
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_GEMINI_API_KEY
+                  key: latest
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_JWT_SECRET
+                  key: latest
+            - name: GMAIL_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_GOOGLE_CLIENT_ID
+                  key: latest
+            - name: GMAIL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_GOOGLE_CLIENT_SECRET
+                  key: latest
+            - name: NOTION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_NOTION_TOKEN
+                  key: latest
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 18
+
+        # ── 2. Google Workspace MCP sidecar ─────────────────────────────────
+        - name: workspace-mcp
+          image: REGION-docker.pkg.dev/PROJECT_ID/REPO/workspace-mcp:latest
+          resources:
+            limits:
+              cpu: "0.5"
+              memory: "512Mi"
+          env:
+            - name: MCP_HOST
+              value: "0.0.0.0"
+            - name: MCP_PORT
+              value: "8001"
+            - name: MCP_TRANSPORT
+              value: "sse"
+            - name: GOOGLE_WORKSPACE_ENABLED_CAPABILITIES
+              value: "calendar,gmail,drive,docs"
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_GOOGLE_CLIENT_ID
+                  key: latest
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_GOOGLE_CLIENT_SECRET
+                  key: latest
+
+        # ── 3. MongoDB MCP sidecar ───────────────────────────────────────────
+        - name: mongodb-mcp
+          image: REGION-docker.pkg.dev/PROJECT_ID/REPO/mongodb-mcp:latest
+          resources:
+            limits:
+              cpu: "0.25"
+              memory: "256Mi"
+          env:
+            - name: MCP_TRANSPORT
+              value: "sse"
+            - name: MCP_PORT
+              value: "8002"
+            - name: MCP_MONGODB_READ_ONLY
+              value: "true"
+            - name: MCP_MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_MONGO_URI
+                  key: latest
+
+        # ── 4. Notion MCP sidecar ────────────────────────────────────────────
+        - name: notion-mcp
+          image: REGION-docker.pkg.dev/PROJECT_ID/REPO/notion-mcp:latest
+          resources:
+            limits:
+              cpu: "0.25"
+              memory: "256Mi"
+          env:
+            - name: MCP_TRANSPORT
+              value: "sse"
+            - name: MCP_PORT
+              value: "8003"
+            - name: NOTION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: AIDEN_NOTION_TOKEN
+                  key: latest

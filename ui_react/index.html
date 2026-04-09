@@ -726,6 +726,120 @@
       border: 1px solid var(--border);
     }
 
+    /* ── MARKDOWN RENDERING ── */
+    .msg-bubble p {
+      margin: 0 0 6px 0;
+      line-height: 1.65;
+    }
+
+    .msg-bubble p:last-child {
+      margin-bottom: 0;
+    }
+
+    .msg-bubble .md-spacer {
+      height: 6px;
+    }
+
+    .msg-bubble strong {
+      font-weight: 600;
+      color: var(--cyan2);
+    }
+
+    .msg-bubble em {
+      font-style: italic;
+      color: var(--text);
+    }
+
+    .msg-bubble code {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--amber);
+    }
+
+    .msg-bubble pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .msg-bubble h1,
+    .msg-bubble h2,
+    .msg-bubble h3 {
+      font-family: var(--font-head);
+      color: var(--cyan);
+      margin: 10px 0 6px 0;
+      line-height: 1.3;
+    }
+
+    .msg-bubble h1 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .msg-bubble h2 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .msg-bubble h3 {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .msg-bubble ul,
+    .msg-bubble ol {
+      margin: 6px 0 6px 0;
+      padding-left: 18px;
+    }
+
+    .msg-bubble ul {
+      list-style: none;
+      padding-left: 4px;
+    }
+
+    .msg-bubble ul li {
+      position: relative;
+      padding-left: 14px;
+      margin-bottom: 4px;
+      line-height: 1.6;
+    }
+
+    .msg-bubble ul li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: var(--cyan);
+      font-size: 10px;
+      top: 3px;
+    }
+
+    .msg-bubble ol {
+      list-style: decimal;
+    }
+
+    .msg-bubble ol li {
+      margin-bottom: 4px;
+      line-height: 1.6;
+      padding-left: 4px;
+    }
+
+    .msg-bubble ol li::marker {
+      color: var(--cyan);
+      font-weight: 600;
+    }
+
+    .msg-bubble hr {
+      border: none;
+      border-top: 1px solid var(--border2);
+      margin: 10px 0;
+    }
+
     /* typing indicator */
     .typing-indicator {
       display: flex;
@@ -1497,6 +1611,53 @@
       gap: 4px;
     }
 
+    /* ── TASK INLINE EDIT ROW ── */
+    .task-edit-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding-left: 30px;
+      flex-wrap: wrap;
+    }
+
+    .task-inline-select {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      border-radius: 4px;
+      padding: 3px 6px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    .task-inline-select:hover,
+    .task-inline-select:focus {
+      border-color: var(--cyan);
+      color: var(--text);
+    }
+
+    .task-delete-btn {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      background: var(--red-dim);
+      border: 1px solid rgba(252, 129, 129, 0.3);
+      color: var(--red);
+      border-radius: 4px;
+      padding: 3px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .task-delete-btn:hover {
+      background: var(--red);
+      color: var(--bg);
+    }
+
     .tag {
       background: var(--bg4);
       padding: 2px 8px;
@@ -1707,6 +1868,516 @@
       display: flex;
       flex-direction: column;
       gap: 14px;
+    }
+
+    /* ── NOTE MODAL ── */
+    .note-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      animation: fadeIn .15s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0
+      }
+
+      to {
+        opacity: 1
+      }
+    }
+
+    .note-modal {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      width: 680px;
+      max-width: calc(100vw - 32px);
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: slideUp .18s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(16px);
+        opacity: 0
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1
+      }
+    }
+
+    .note-modal-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .note-modal-header-title {
+      font-family: var(--font-head);
+      font-size: 15px;
+      font-weight: 700;
+      flex: 1;
+      color: var(--text);
+    }
+
+    .note-modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .note-modal-footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .note-modal-meta {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text3);
+      flex: 1;
+    }
+
+    .note-tag-pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .note-tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text2);
+    }
+
+    .note-tag-pill .remove-tag {
+      cursor: pointer;
+      color: var(--text3);
+      font-size: 13px;
+      line-height: 1;
+      padding: 0 2px;
+      transition: color .15s;
+    }
+
+    .note-tag-pill .remove-tag:hover {
+      color: var(--red);
+    }
+
+    .note-modal-input {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: var(--font-body);
+      color: var(--text);
+      outline: none;
+      resize: none;
+      transition: border-color .2s;
+    }
+
+    .note-modal-input:focus {
+      border-color: var(--border2);
+    }
+
+    .note-modal-title-input {
+      font-family: var(--font-head);
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    .btn-icon {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text2);
+      font-size: 15px;
+      transition: all .15s;
+    }
+
+    .btn-icon:hover {
+      border-color: var(--border2);
+      color: var(--text);
+    }
+
+    .btn-icon.danger:hover {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .btn-save {
+      background: var(--cyan-dim);
+      border: 1px solid rgba(99, 179, 237, .4);
+      color: var(--cyan);
+      border-radius: 6px;
+      padding: 8px 20px;
+      font-family: var(--font-head);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .btn-save:hover {
+      background: rgba(99, 179, 237, .25);
+    }
+
+    .btn-cancel-sm {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text3);
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .btn-cancel-sm:hover {
+      border-color: var(--border2);
+      color: var(--text);
+    }
+
+    .note-modal-tag-add {
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .note-modal-tag-add input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text);
+      outline: none;
+    }
+
+    .note-modal-tag-add input:focus {
+      border-color: var(--border2);
+    }
+
+    .note-modal-tag-add button {
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .note-modal-tag-add button:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    /* ── NOTE MODAL ── */
+    .note-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 12, 18, 0.82);
+      z-index: 9000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn .15s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0
+      }
+
+      to {
+        opacity: 1
+      }
+    }
+
+    .note-modal {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      width: min(720px, 92vw);
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: slideUp .18s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(16px);
+        opacity: 0
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1
+      }
+    }
+
+    .note-modal-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .note-modal-title-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: var(--font-head);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      caret-color: var(--cyan);
+    }
+
+    .note-modal-title-input::placeholder {
+      color: var(--text3);
+    }
+
+    .note-modal-title-view {
+      flex: 1;
+      font-family: var(--font-head);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .note-modal-body {
+      padding: 18px 20px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .note-modal-content-view {
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--text);
+      white-space: pre-wrap;
+      flex: 1;
+    }
+
+    .note-modal-content-input {
+      flex: 1;
+      min-height: 240px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      resize: vertical;
+      outline: none;
+    }
+
+    .note-modal-content-input:focus {
+      border-color: var(--border2);
+    }
+
+    .note-modal-meta {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .note-modal-meta input {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text);
+      outline: none;
+    }
+
+    .note-modal-meta input:focus {
+      border-color: var(--border2);
+    }
+
+    .note-modal-meta input::placeholder {
+      color: var(--text3);
+    }
+
+    .note-modal-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .note-modal-footer .left {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .note-modal-footer .right {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nm-meta-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .nm-date {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text3);
+    }
+
+    .nm-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-family: var(--font-head);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: .04em;
+      transition: all .15s;
+    }
+
+    .nm-btn-primary {
+      background: var(--cyan);
+      color: var(--bg);
+      border: none;
+    }
+
+    .nm-btn-primary:hover {
+      opacity: .88;
+    }
+
+    .nm-btn-secondary {
+      background: transparent;
+      color: var(--text2);
+      border: 1px solid var(--border2);
+    }
+
+    .nm-btn-secondary:hover {
+      background: var(--bg3);
+    }
+
+    .nm-btn-danger {
+      background: transparent;
+      color: var(--red);
+      border: 1px solid var(--red-dim);
+    }
+
+    .nm-btn-danger:hover {
+      background: var(--red-dim);
+    }
+
+    .nm-edit-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--amber-dim);
+      color: var(--amber);
+      letter-spacing: .04em;
+    }
+
+    .note-card {
+      position: relative;
+    }
+
+    .note-card-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: none;
+      gap: 4px;
+    }
+
+    .note-card:hover .note-card-actions {
+      display: flex;
+    }
+
+    .note-card-action-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 1px solid var(--border2);
+      background: var(--bg3);
+      color: var(--text2);
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .12s;
+    }
+
+    .note-card-action-btn:hover {
+      background: var(--bg4);
+      color: var(--text);
+    }
+
+    .note-card-action-btn.danger:hover {
+      background: var(--red-dim);
+      color: var(--red);
+      border-color: var(--red-dim);
     }
 
     /* ── VISION TAB ── */
@@ -2762,7 +3433,7 @@
               <div class="tasks-title">Notes</div>
               <div class="search-bar">
                 <span style="color:var(--text3)">🔍</span>
-                <input placeholder="Search notes..." id="notes-search" oninput="searchNotes(this.value)" />
+                <input placeholder="Search notes..." id="notes-search" oninput="debouncedSearchNotes(this.value)" />
               </div>
             </div>
             <div id="notes-cards-container" class="notes-cards">
@@ -2789,255 +3460,301 @@
               <input class="form-input" id="new-note-project" placeholder="e.g. AIDEN, Q2-Planning" />
             </div>
             <div class="form-group">
-              <label class="form-label">TAGS</label>
+              <label class="form-label">TAGS <span style="font-size:9px;color:var(--text3)">(auto: "general" if
+                  blank)</span></label>
               <input class="form-input" id="new-note-tags" placeholder="ideas, meeting, research" />
+              <span
+                style="font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;display:block">←
+                Leave blank → auto-tagged "general"</span>
             </div>
             <button class="btn-create" onclick="createNote()">+ CREATE NOTE</button>
           </div>
         </div>
       </div>
 
-      <!-- VISION TAB -->
-      <div class="tab-content" id="tab-vision">
-        <div class="vision-layout">
-          <div class="vision-upload">
-            <div class="tasks-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Vision Analysis
-            </div>
-            <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
-              ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
-              <div class="drop-icon">📸</div>
-              <div class="drop-title">Drop an image or click to upload</div>
-              <div class="drop-sub">Supports: whiteboards, documents, business cards, receipts, screenshots</div>
-              <input type="file" id="file-input" accept="image/*" style="display:none" onchange="fileSelected(event)" />
-            </div>
-            <div id="vision-preview" class="vision-preview hidden"></div>
-            <button class="analyze-btn hidden" id="analyze-btn" onclick="analyzeImage()">🔍 ANALYZE IMAGE</button>
-            <div id="vision-create-tasks" class="hidden">
-              <button class="btn-create" style="background:var(--green);color:var(--bg)"
-                onclick="createTasksFromVision()">+ CREATE TASKS FROM IMAGE</button>
+      <!-- NOTE MODAL (open/edit/delete) -->
+      <div id="note-modal-overlay" class="note-modal-overlay" style="display:none" onclick="closeNoteModal(event)">
+        <div class="note-modal" onclick="event.stopPropagation()">
+          <div class="note-modal-header">
+            <div id="nm-title-view" class="note-modal-title-view" style="display:none"></div>
+            <input id="nm-title-input" class="note-modal-title-input" placeholder="Note title..."
+              style="display:none" />
+            <span id="nm-edit-badge" class="nm-edit-badge" style="display:none">EDITING</span>
+            <button class="note-card-action-btn" onclick="closeNoteModal(null)" title="Close"
+              style="width:28px;height:28px;font-size:14px;flex-shrink:0">✕</button>
+          </div>
+          <div class="note-modal-body">
+            <div id="nm-content-view" class="note-modal-content-view" style="display:none"></div>
+            <textarea id="nm-content-input" class="note-modal-content-input" placeholder="Note content..."
+              style="display:none"></textarea>
+            <div id="nm-meta-view" class="nm-meta-row" style="display:none"></div>
+            <div id="nm-meta-edit" class="note-modal-meta" style="display:none">
+              <input id="nm-project-input" placeholder="Project (optional)" style="flex:1;min-width:120px" />
+              <input id="nm-tags-input" placeholder="Tags (comma-separated)" style="flex:2;min-width:160px" />
             </div>
           </div>
-          <div class="vision-result" id="vision-result">
-            <div class="empty-state">
-              <div class="empty-icon">👁</div>
-              <div class="empty-title">Upload an image</div>
-              <div class="empty-sub">Results appear here</div>
+          <div class="note-modal-footer">
+            <div class="left">
+              <button id="nm-delete-btn" class="nm-btn nm-btn-danger" onclick="deleteNoteModal()">🗑 Delete</button>
+              <span id="nm-date-label" class="nm-date"></span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- HABITS TAB -->
-      <div class="tab-content" id="tab-habits">
-        <div style="flex:1;overflow-y:auto;padding:20px">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-            <div class="tasks-title">Habits &amp; Streaks</div>
-            <span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">Powered by recurring
-              tasks</span>
-          </div>
-          <div id="habits-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">
-            <div class="empty-state">
-              <div class="empty-icon">&#9733;</div>
-              <div class="empty-title">No habits yet</div>
-              <div class="empty-sub">Create a recurring task to start tracking streaks</div>
+            <div class="right">
+              <button id="nm-edit-btn" class="nm-btn nm-btn-secondary" onclick="startEditNote()" style="display:none">✏
+                Edit</button>
+              <button id="nm-cancel-btn" class="nm-btn nm-btn-secondary" onclick="cancelEditNote()"
+                style="display:none">Cancel</button>
+              <button id="nm-save-btn" class="nm-btn nm-btn-primary" onclick="saveNoteModal()" style="display:none">Save
+                changes</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- BRIEFING TAB -->
-      <div class="tab-content" id="tab-briefing">
-        <div class="briefing-wrap" id="briefing-content">
+      <!-- placeholder to keep tab structure intact -->
+      <div style="display:none">
+      </div>
+    </div>
+
+    <!-- VISION TAB -->
+    <div class="tab-content" id="tab-vision">
+      <div class="vision-layout">
+        <div class="vision-upload">
+          <div class="tasks-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Vision Analysis
+          </div>
+          <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
+            ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+            <div class="drop-icon">📸</div>
+            <div class="drop-title">Drop an image or click to upload</div>
+            <div class="drop-sub">Supports: whiteboards, documents, business cards, receipts, screenshots</div>
+            <input type="file" id="file-input" accept="image/*" style="display:none" onchange="fileSelected(event)" />
+          </div>
+          <div id="vision-preview" class="vision-preview hidden"></div>
+          <button class="analyze-btn hidden" id="analyze-btn" onclick="analyzeImage()">🔍 ANALYZE IMAGE</button>
+          <div id="vision-create-tasks" class="hidden">
+            <button class="btn-create" style="background:var(--green);color:var(--bg)"
+              onclick="createTasksFromVision()">+ CREATE TASKS FROM IMAGE</button>
+          </div>
+        </div>
+        <div class="vision-result" id="vision-result">
           <div class="empty-state">
-            <div class="empty-icon" style="font-size:40px;opacity:.3">&#9788;</div>
-            <div class="empty-title">Loading briefing...</div>
+            <div class="empty-icon">👁</div>
+            <div class="empty-title">Upload an image</div>
+            <div class="empty-sub">Results appear here</div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- FORECAST TAB -->
-      <div class="tab-content" id="tab-forecast">
-        <div class="forecast-wrap" id="forecast-content">
+    <!-- HABITS TAB -->
+    <div class="tab-content" id="tab-habits">
+      <div style="flex:1;overflow-y:auto;padding:20px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <div class="tasks-title">Habits &amp; Streaks</div>
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">Powered by recurring
+            tasks</span>
+        </div>
+        <div id="habits-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">
           <div class="empty-state">
-            <div class="empty-icon" style="font-size:40px;opacity:.3">&#9650;</div>
-            <div class="empty-title">Loading forecast...</div>
-            <div class="empty-sub">Calculating your workload with ML + DP</div>
+            <div class="empty-icon">&#9733;</div>
+            <div class="empty-title">No habits yet</div>
+            <div class="empty-sub">Create a recurring task to start tracking streaks</div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- SETTINGS TAB -->
-      <div class="tab-content" id="tab-settings">
-        <div style="flex:1;overflow-y:auto;padding:24px;max-width:680px;margin:0 auto;width:100%">
-          <div style="font-family:var(--font-head);font-size:20px;font-weight:700;margin-bottom:4px;">Settings</div>
-          <div
-            style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:28px;letter-spacing:.1em">
-            // INTEGRATIONS & PREFERENCES</div>
+    <!-- BRIEFING TAB -->
+    <div class="tab-content" id="tab-briefing">
+      <div class="briefing-wrap" id="briefing-content">
+        <div class="empty-state">
+          <div class="empty-icon" style="font-size:40px;opacity:.3">&#9788;</div>
+          <div class="empty-title">Loading briefing...</div>
+        </div>
+      </div>
+    </div>
 
-          <!-- Gmail Card -->
-          <div
-            style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-              <div style="font-size:22px;">📧</div>
-              <div>
-                <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Gmail</div>
-                <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Inbox monitoring &amp; task
-                  extraction</div>
-              </div>
-              <div id="gmail-status-badge"
-                style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
-                NOT CONNECTED</div>
+    <!-- FORECAST TAB -->
+    <div class="tab-content" id="tab-forecast">
+      <div class="forecast-wrap" id="forecast-content">
+        <div class="empty-state">
+          <div class="empty-icon" style="font-size:40px;opacity:.3">&#9650;</div>
+          <div class="empty-title">Loading forecast...</div>
+          <div class="empty-sub">Calculating your workload with ML + DP</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS TAB -->
+    <div class="tab-content" id="tab-settings">
+      <div style="flex:1;overflow-y:auto;padding:24px;max-width:680px;margin:0 auto;width:100%">
+        <div style="font-family:var(--font-head);font-size:20px;font-weight:700;margin-bottom:4px;">Settings</div>
+        <div
+          style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:28px;letter-spacing:.1em">
+          // INTEGRATIONS & PREFERENCES</div>
+
+        <!-- Gmail Card -->
+        <div
+          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+            <div style="font-size:22px;">📧</div>
+            <div>
+              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Gmail</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Inbox monitoring &amp; task
+                extraction</div>
             </div>
-            <div id="gmail-connected-info"
-              style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
-              Connected as: <span id="gmail-connected-email" style="color:var(--cyan)"></span>
-            </div>
-            <div style="display:flex;gap:10px;">
-              <button id="gmail-connect-btn" class="btn-primary"
-                style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;" onclick="connectGmail()">
-                Connect Gmail
-              </button>
-              <button id="gmail-disconnect-btn" class="btn-primary"
-                style="margin-top:0;display:none;width:auto;padding:10px 20px;font-size:12px;background:var(--red);color:#fff;"
-                onclick="disconnectGmail()">
-                Disconnect
-              </button>
-            </div>
+            <div id="gmail-status-badge"
+              style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
+              NOT CONNECTED</div>
           </div>
-
-          <!-- Google Calendar Card -->
-          <div
-            style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-              <div style="font-size:22px;">📅</div>
-              <div>
-                <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Google Calendar</div>
-                <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Read &amp; create events,
-                  detect conflicts, find free slots</div>
-              </div>
-              <div id="cal-status-badge"
-                style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
-                NOT CONNECTED</div>
-            </div>
-            <div id="cal-connected-info"
-              style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
-              ✓ Calendar access granted
-            </div>
-            <div
-              style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:12px;line-height:1.6;">
-              Requires Google OAuth. Uses the same Google account as Gmail.<br />
-              Add <code style="color:var(--cyan)">https://www.googleapis.com/auth/calendar</code> to your OAuth client
-              scopes.
-            </div>
-            <div style="display:flex;gap:10px;">
-              <button id="cal-connect-btn" class="btn-primary"
-                style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;" onclick="connectCalendar()">
-                Connect Google Calendar
-              </button>
-              <button id="cal-disconnect-btn" class="btn-primary"
-                style="margin-top:0;display:none;width:auto;padding:10px 20px;font-size:12px;background:var(--red);color:#fff;"
-                onclick="disconnectCalendar()">
-                Disconnect
-              </button>
-            </div>
+          <div id="gmail-connected-info"
+            style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+            Connected as: <span id="gmail-connected-email" style="color:var(--cyan)"></span>
           </div>
-
-          <!-- Telegram Card -->
-          <div
-            style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-              <div style="font-size:22px;">✈️</div>
-              <div>
-                <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Telegram Bot</div>
-                <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Chat with AIDEN from
-                  anywhere via Telegram</div>
-              </div>
-              <div id="tg-status-badge"
-                style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
-                NOT LINKED</div>
-            </div>
-            <div id="tg-connected-info"
-              style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
-              Linked · Chat ID: <span id="tg-chat-id" style="color:var(--cyan)"></span>
-            </div>
-            <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);line-height:1.6;">
-              Set <code style="color:var(--cyan)">TELEGRAM_BOT_TOKEN</code> in .env, then send
-              <code style="color:var(--cyan)">/start &lt;your-jwt-token&gt;</code> to your bot on Telegram.
-            </div>
-          </div>
-
-          <!-- Account Info Card -->
-          <div
-            style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
-            <div style="font-family:var(--font-head);font-size:14px;font-weight:600;margin-bottom:12px;">Account</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-              <div>
-                <div
-                  style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">
-                  NAME</div>
-                <div id="settings-name" style="font-size:13px;">—</div>
-              </div>
-              <div>
-                <div
-                  style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">
-                  EMAIL</div>
-                <div id="settings-email" style="font-size:13px;">—</div>
-              </div>
-              <div>
-                <div
-                  style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">
-                  ROLE</div>
-                <div id="settings-role" style="font-size:13px;">—</div>
-              </div>
-              <div>
-                <div
-                  style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">
-                  USER ID</div>
-                <div id="settings-uid" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);">—</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Danger Zone -->
-          <div style="background:var(--bg2);border:1px solid rgba(252,129,129,0.2);border-radius:12px;padding:20px;">
-            <div
-              style="font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--red);margin-bottom:12px;">
-              Session</div>
-            <button class="btn-primary"
-              style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;background:transparent;border:1px solid var(--red);color:var(--red);"
-              onclick="doLogout()">
-              Sign Out
+          <div style="display:flex;gap:10px;">
+            <button id="gmail-connect-btn" class="btn-primary"
+              style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;" onclick="connectGmail()">
+              Connect Gmail
+            </button>
+            <button id="gmail-disconnect-btn" class="btn-primary"
+              style="margin-top:0;display:none;width:auto;padding:10px 20px;font-size:12px;background:var(--red);color:#fff;"
+              onclick="disconnectGmail()">
+              Disconnect
             </button>
           </div>
         </div>
-      </div>
 
-      <!-- HISTORY TAB -->
-      <div class="tab-content" id="tab-history">
-        <div style="flex:1;overflow-y:auto;padding:24px;">
-          <div style="max-width:720px;margin:0 auto">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-              <div>
-                <div style="font-family:var(--font-head);font-size:20px;font-weight:700">Workflow History</div>
-                <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.1em">// AGENT
-                  EXECUTION LOG</div>
-              </div>
-              <button onclick="loadHistory()"
-                style="margin-left:auto;background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:7px 14px;border-radius:6px;font-family:var(--font-mono);font-size:10px;cursor:pointer;letter-spacing:.08em">↻
-                REFRESH</button>
+        <!-- Google Calendar Card -->
+        <div
+          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+            <div style="font-size:22px;">📅</div>
+            <div>
+              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Google Calendar</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Read &amp; create events,
+                detect conflicts, find free slots</div>
             </div>
-            <div id="history-list">
-              <div class="empty-state">
-                <div class="empty-icon" style="font-size:32px;opacity:.3">⏱</div>
-                <div class="empty-title">No history yet</div>
-                <div class="empty-sub">Start a conversation to see execution traces here</div>
-              </div>
+            <div id="cal-status-badge"
+              style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
+              NOT CONNECTED</div>
+          </div>
+          <div id="cal-connected-info"
+            style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+            ✓ Calendar access granted
+          </div>
+          <div
+            style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:12px;line-height:1.6;">
+            Requires Google OAuth. Uses the same Google account as Gmail.<br />
+            Add <code style="color:var(--cyan)">https://www.googleapis.com/auth/calendar</code> to your OAuth client
+            scopes.
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button id="cal-connect-btn" class="btn-primary"
+              style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;" onclick="connectCalendar()">
+              Connect Google Calendar
+            </button>
+            <button id="cal-disconnect-btn" class="btn-primary"
+              style="margin-top:0;display:none;width:auto;padding:10px 20px;font-size:12px;background:var(--red);color:#fff;"
+              onclick="disconnectCalendar()">
+              Disconnect
+            </button>
+          </div>
+        </div>
+
+        <!-- Telegram Card -->
+        <div
+          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div style="font-size:22px;">✈️</div>
+            <div>
+              <div style="font-family:var(--font-head);font-size:14px;font-weight:600;">Telegram Bot</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Chat with AIDEN from
+                anywhere via Telegram</div>
+            </div>
+            <div id="tg-status-badge"
+              style="margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid;color:var(--text3);border-color:var(--border)">
+              NOT LINKED</div>
+          </div>
+          <div id="tg-connected-info"
+            style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+            Linked · Chat ID: <span id="tg-chat-id" style="color:var(--cyan)"></span>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);line-height:1.6;">
+            Set <code style="color:var(--cyan)">TELEGRAM_BOT_TOKEN</code> in .env, then send
+            <code style="color:var(--cyan)">/start &lt;your-jwt-token&gt;</code> to your bot on Telegram.
+          </div>
+        </div>
+
+        <!-- Account Info Card -->
+        <div
+          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <div style="font-family:var(--font-head);font-size:14px;font-weight:600;margin-bottom:12px;">Account</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div
+                style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">
+                NAME</div>
+              <div id="settings-name" style="font-size:13px;">—</div>
+            </div>
+            <div>
+              <div
+                style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">
+                EMAIL</div>
+              <div id="settings-email" style="font-size:13px;">—</div>
+            </div>
+            <div>
+              <div
+                style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">
+                ROLE</div>
+              <div id="settings-role" style="font-size:13px;">—</div>
+            </div>
+            <div>
+              <div
+                style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:4px;">
+                USER ID</div>
+              <div id="settings-uid" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div style="background:var(--bg2);border:1px solid rgba(252,129,129,0.2);border-radius:12px;padding:20px;">
+          <div style="font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--red);margin-bottom:12px;">
+            Session</div>
+          <button class="btn-primary"
+            style="margin-top:0;width:auto;padding:10px 20px;font-size:12px;background:transparent;border:1px solid var(--red);color:var(--red);"
+            onclick="doLogout()">
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY TAB -->
+    <div class="tab-content" id="tab-history">
+      <div style="flex:1;overflow-y:auto;padding:24px;">
+        <div style="max-width:720px;margin:0 auto">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+            <div>
+              <div style="font-family:var(--font-head);font-size:20px;font-weight:700">Workflow History</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.1em">// AGENT
+                EXECUTION LOG</div>
+            </div>
+            <button onclick="loadHistory()"
+              style="margin-left:auto;background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:7px 14px;border-radius:6px;font-family:var(--font-mono);font-size:10px;cursor:pointer;letter-spacing:.08em">↻
+              REFRESH</button>
+          </div>
+          <div id="history-list">
+            <div class="empty-state">
+              <div class="empty-icon" style="font-size:32px;opacity:.3">⏱</div>
+              <div class="empty-title">No history yet</div>
+              <div class="empty-sub">Start a conversation to see execution traces here</div>
             </div>
           </div>
         </div>
       </div>
-
     </div>
+
+  </div>
   </div>
 
   <!-- TOAST CONTAINER -->
@@ -3870,12 +4587,104 @@ Be thorough — go through every email you find.`,
     }
 
     // ── APPEND MESSAGE ────────────────────────────────────────────────────────────
+    // ── MARKDOWN RENDERER ────────────────────────────────────────────────────────
+    function renderMarkdown(raw) {
+      if (!raw) return '';
+
+      let text = raw
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const codeBlocks = [];
+      text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push('<pre><code>' + code.trim() + '</code></pre>');
+        return '\x00CB' + idx + '\x00';
+      });
+
+      const inlineCodes = [];
+      text = text.replace(/`([^`\n]+)`/g, (_m, code) => {
+        const idx = inlineCodes.length;
+        inlineCodes.push('<code>' + code + '</code>');
+        return '\x00IC' + idx + '\x00';
+      });
+
+      function inlineFmt(s) {
+        s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        s = s.replace(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)/g, '<em>$1</em>');
+        s = s.replace(/(?<!_)_(?!\s)([^_\n]+?)(?<!\s)_(?!_)/g, '<em>$1</em>');
+        s = s.replace(/\x00IC(\d+)\x00/g, (_m, i) => inlineCodes[+i]);
+        return s;
+      }
+
+      const lines = text.split('\n');
+      const out = [];
+      let inUl = false, inOl = false;
+
+      const closeList = () => {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (inOl) { out.push('</ol>'); inOl = false; }
+      };
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (/\x00CB\d+\x00/.test(line)) {
+          closeList();
+          out.push(line.replace(/\x00CB(\d+)\x00/g, (_m, idx) => codeBlocks[+idx]));
+          continue;
+        }
+
+        const h3 = line.match(/^### (.+)$/);
+        if (h3) { closeList(); out.push('<h3>' + inlineFmt(h3[1]) + '</h3>'); continue; }
+        const h2 = line.match(/^## (.+)$/);
+        if (h2) { closeList(); out.push('<h2>' + inlineFmt(h2[1]) + '</h2>'); continue; }
+        const h1m = line.match(/^# (.+)$/);
+        if (h1m) { closeList(); out.push('<h1>' + inlineFmt(h1m[1]) + '</h1>'); continue; }
+
+        if (/^---+$/.test(line.trim())) { closeList(); out.push('<hr/>'); continue; }
+
+        const ul = line.match(/^[ \t]*[-*\u2022]\s+(.+)$/);
+        if (ul) {
+          if (inOl) { out.push('</ol>'); inOl = false; }
+          if (!inUl) { out.push('<ul>'); inUl = true; }
+          out.push('<li>' + inlineFmt(ul[1]) + '</li>');
+          continue;
+        }
+
+        const ol = line.match(/^[ \t]*\d+[.)]\s+(.+)$/);
+        if (ol) {
+          if (inUl) { out.push('</ul>'); inUl = false; }
+          if (!inOl) { out.push('<ol>'); inOl = true; }
+          out.push('<li>' + inlineFmt(ol[1]) + '</li>');
+          continue;
+        }
+
+        closeList();
+
+        if (line.trim() === '') {
+          out.push('<div class="md-spacer"></div>');
+        } else {
+          out.push('<p>' + inlineFmt(line) + '</p>');
+        }
+      }
+
+      closeList();
+      return out.join('');
+    }
+
+    // ── APPEND MESSAGE ────────────────────────────────────────────────────────────
     function appendMsg(role, text, agents, trace) {
       const wrap = document.getElementById('chat-messages');
       const isAI = role === 'ai';
-      const safeText = text
-        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
-        .replace(/\n/g, '<br/>');
+      const safeText = isAI ? renderMarkdown(text) : (
+        text
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br/>')
+      );
 
       const agentBadges = (agents || []).map(a =>
         `<span class="msg-agent-badge">${a.replace(/_/g, ' ').toUpperCase()}</span>`
@@ -3968,20 +4777,42 @@ Be thorough — go through every email you find.`,
         c.innerHTML = `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">No tasks</div><div class="empty-sub">Create your first task →</div></div>`;
         return;
       }
-      c.innerHTML = tasks.map(t => `
-    <div class="task-card ${t.status === 'completed' ? 'completed' : ''}" id="task-${t.task_id}">
+      c.innerHTML = tasks.map(t => {
+        const pri = (t.priority || 'P3').toUpperCase();
+        const sta = t.status || 'todo';
+        const isDone = sta === 'completed';
+        return `
+    <div class="task-card ${isDone ? 'completed' : ''}" id="task-${t.task_id}">
       <div class="task-top">
-        <div class="task-check ${t.status === 'completed' ? 'done' : ''}" onclick="toggleTask('${t.task_id}','${t.status}')">${t.status === 'completed' ? '✓' : ''}</div>
+        <div class="task-check ${isDone ? 'done' : ''}" onclick="toggleTask('${t.task_id}','${sta}')" title="Toggle complete">${isDone ? '✓' : ''}</div>
         <div class="task-title">${escHtml(t.title)}</div>
-        <span class="priority-badge ${t.priority.toLowerCase()}">${t.priority}</span>
+        <span class="priority-badge ${pri.toLowerCase()}">${pri}</span>
       </div>
       <div class="task-meta">
         ${t.due_date ? `<span class="task-meta-item">📅 ${new Date(t.due_date).toLocaleDateString()}</span>` : ''}
-        <span class="task-meta-item" style="color:${statusColor(t.status)}">${t.status.replace('_', ' ')}</span>
-        ${t.tags.slice(0, 3).map(tag => `<span class="tag">${escHtml(tag)}</span>`).join('')}
-        <span class="task-meta-item" style="margin-left:auto;cursor:pointer;color:var(--red)" onclick="deleteTask('${t.task_id}')">✕</span>
+        <span class="task-meta-item" style="color:${statusColor(sta)}">${sta.replace('_', ' ')}</span>
+        ${(t.tags || []).slice(0, 3).map(tag => `<span class="tag">${escHtml(tag)}</span>`).join('')}
+        <span class="task-meta-item" style="margin-left:auto"></span>
       </div>
-    </div>`).join('');
+      <div class="task-edit-row">
+        <label style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">PRIORITY</label>
+        <select class="task-inline-select" onchange="updateTaskField('${t.task_id}','priority',this.value)">
+          <option value="P0" ${pri === 'P0' ? 'selected' : ''}>P0 — Critical</option>
+          <option value="P1" ${pri === 'P1' ? 'selected' : ''}>P1 — High</option>
+          <option value="P2" ${pri === 'P2' ? 'selected' : ''}>P2 — Medium</option>
+          <option value="P3" ${pri === 'P3' ? 'selected' : ''}>P3 — Low</option>
+        </select>
+        <label style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">STATUS</label>
+        <select class="task-inline-select" onchange="updateTaskField('${t.task_id}','status',this.value)">
+          <option value="todo" ${sta === 'todo' ? 'selected' : ''}>To Do</option>
+          <option value="in_progress" ${sta === 'in_progress' ? 'selected' : ''}>In Progress</option>
+          <option value="completed" ${sta === 'completed' ? 'selected' : ''}>Completed</option>
+          <option value="cancelled" ${sta === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+        </select>
+        <button class="task-delete-btn" onclick="deleteTask('${t.task_id}')" title="Delete task">🗑 Delete</button>
+      </div>
+    </div>`;
+      }).join('');
     }
 
     function statusColor(s) {
@@ -4014,6 +4845,24 @@ Be thorough — go through every email you find.`,
         const r = await fetch(`${API}/tasks/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
         if (r.ok || r.status === 204) { loadTasks(true); showToast('Task deleted', 'success'); }
       } catch { }
+    }
+
+    async function updateTaskField(id, field, value) {
+      try {
+        const body = {};
+        body[field] = value;
+        const r = await fetch(`${API}/tasks/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body)
+        });
+        if (r.ok) {
+          showToast(`✓ Task ${field} updated`, 'success');
+          loadTasks(true);
+        } else {
+          showToast('Update failed', 'error');
+        }
+      } catch { showToast('Network error', 'error'); }
     }
 
     async function loadRecurring() {
@@ -4078,6 +4927,11 @@ Be thorough — go through every email you find.`,
     }
 
     // ─── NOTES ───────────────────────────────────────────────────────────
+    let _searchDebounceTimer = null;
+    function debouncedSearchNotes(query) {
+      clearTimeout(_searchDebounceTimer);
+      _searchDebounceTimer = setTimeout(() => searchNotes(query), 350);
+    }
     async function loadNotes(silent = false) {
       if (!token) return;
       if (!silent && !_guard('loadNotes')) return;
@@ -4094,41 +4948,223 @@ Be thorough — go through every email you find.`,
 
     function renderNotes(notes) {
       const c = document.getElementById('notes-cards-container');
-      if (!notes.length) {
-        c.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:40px 0"><div class="empty-icon">📝</div><div class="empty-title">No notes yet</div><div class="empty-sub">Create your first note →</div></div>`;
+      if (!notes || !notes.length) {
+        c.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:40px 0"><div class="empty-icon">📝</div><div class="empty-title">No notes found</div><div class="empty-sub">Try a different search or create a new note →</div></div>`;
         return;
       }
-      c.innerHTML = notes.map(n => `
-    <div class="note-card">
-      <div class="note-card-title">${escHtml(n.title)}</div>
-      <div class="note-card-preview">${escHtml(n.content)}</div>
+      c.innerHTML = notes.map(n => {
+        const score = (n._score != null && n._score !== undefined)
+          ? `<span style="font-family:var(--font-mono);font-size:9px;color:var(--cyan);margin-left:auto" title="Semantic similarity">⚡${(n._score * 100).toFixed(0)}%</span>`
+          : (n._model === 'mongodb/regex' ? `<span style="font-family:var(--font-mono);font-size:9px;color:var(--amber);margin-left:auto" title="Text match">🔤 text</span>` : '');
+        const safeId = escHtml(n.note_id || '');
+        return `
+    <div class="note-card" onclick="openNoteModal('${safeId}')" title="Click to open / edit">
+      <div class="note-card-title">${escHtml(n.title || '')}</div>
+      <div class="note-card-preview">${escHtml(n.content || '')}</div>
       <div class="note-card-footer">
-        ${n.tags.slice(0, 3).map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}
+        ${(n.tags || []).slice(0, 3).map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}
         ${n.project ? `<span class="tag" style="color:var(--cyan);border-color:rgba(99,179,237,0.3)">${escHtml(n.project)}</span>` : ''}
         <span class="note-date">${new Date(n.created_at).toLocaleDateString()}</span>
+        ${score}
+        <span style="margin-left:auto;font-size:10px;color:var(--text3);font-family:var(--font-mono)">✏ edit</span>
       </div>
-    </div>`).join('');
+    </div>`;
+      }).join('');
     }
 
     async function searchNotes(query) {
-      if (!query) { renderNotes(allNotes); return; }
+      if (!query || !query.trim()) { renderNotes(allNotes); return; }
+      if (!token) return;
       try {
-        const r = await fetch(`${API}/notes/search?q=${encodeURIComponent(query)}&limit=20`, {
+        const r = await fetch(`${API}/notes/search?q=${encodeURIComponent(query.trim())}&top_k=20`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (r.ok) { const d = await r.json(); renderNotes(d); }
-      } catch { renderNotes(allNotes.filter(n => n.title.toLowerCase().includes(query.toLowerCase()) || n.content.toLowerCase().includes(query.toLowerCase()))); }
+        if (r.ok) {
+          const d = await r.json();
+          // API returns { query, model, results: [...], count } — unwrap .results
+          const results = Array.isArray(d) ? d : (d.results || []);
+          renderNotes(results);
+        } else {
+          // fallback to client-side filter if semantic search fails
+          renderNotes(allNotes.filter(n =>
+            n.title.toLowerCase().includes(query.toLowerCase()) ||
+            n.content.toLowerCase().includes(query.toLowerCase())
+          ));
+        }
+      } catch {
+        renderNotes(allNotes.filter(n =>
+          n.title.toLowerCase().includes(query.toLowerCase()) ||
+          n.content.toLowerCase().includes(query.toLowerCase())
+        ));
+      }
     }
 
+    // ── NOTE MODAL STATE ─────────────────────────────────────────────────────────
+    let _noteModalTags = [];     // working tag list in the open modal
+    let _noteModalNoteId = null; // null = new note, string = editing existing
+
+    function _buildTagPills(tags, onChange) {
+      return tags.map((t, i) =>
+        `<span class="note-tag-pill">${escHtml(t)}<span class="remove-tag" onclick="(${onChange.toString()})(${i})" title="Remove tag">×</span></span>`
+      ).join('');
+    }
+
+    // ── OPEN MODAL (view + edit existing note) ────────────────────────────────
+    function openNoteModal(noteId) {
+      const note = allNotes.find(n => n.note_id === noteId);
+      if (!note) return showToast('Note not found', 'error');
+
+      _noteModalNoteId = noteId;
+      _noteModalTags = [...(note.tags && note.tags.length ? note.tags : ['general'])];
+
+      const overlay = document.createElement('div');
+      overlay.className = 'note-modal-overlay';
+      overlay.id = 'note-modal-overlay';
+      overlay.onclick = e => { if (e.target === overlay) closeNoteModal(); };
+
+      overlay.innerHTML = `
+        <div class="note-modal">
+          <div class="note-modal-header">
+            <span style="font-size:16px">📝</span>
+            <span class="note-modal-header-title">Edit Note</span>
+            <button class="btn-icon danger" onclick="deleteNoteFromModal('${escHtml(noteId)}')" title="Delete note">🗑</button>
+            <button class="btn-icon" onclick="closeNoteModal()" title="Close">✕</button>
+          </div>
+          <div class="note-modal-body">
+            <div class="form-group">
+              <label class="form-label">TITLE *</label>
+              <textarea class="note-modal-input note-modal-title-input" id="nm-title" rows="1"
+                oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+              >${escHtml(note.title)}</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">CONTENT *</label>
+              <textarea class="note-modal-input" id="nm-content" rows="12">${escHtml(note.content)}</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">PROJECT</label>
+              <input class="note-modal-input" id="nm-project" value="${escHtml(note.project || '')}" placeholder="e.g. AIDEN, Q2-Planning" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">TAGS <span style="color:var(--red);font-size:9px">* at least one required</span></label>
+              <div class="note-tag-pill-row" id="nm-tag-pills">${_buildTagPillsModal()}</div>
+              <div class="note-modal-tag-add">
+                <input id="nm-new-tag" placeholder="Add a tag..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTagInModal();}" />
+                <button onclick="addTagInModal()">+ Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="note-modal-footer">
+            <span class="note-modal-meta">
+              Created ${new Date(note.created_at).toLocaleString()} &nbsp;·&nbsp;
+              Updated ${new Date(note.updated_at).toLocaleString()}
+            </span>
+            <button class="btn-cancel-sm" onclick="closeNoteModal()">Cancel</button>
+            <button class="btn-save" onclick="saveNoteModal()">SAVE CHANGES</button>
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+
+      // Auto-grow title textarea
+      requestAnimationFrame(() => {
+        const ta = document.getElementById('nm-title');
+        if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+      });
+    }
+
+    function _buildTagPillsModal() {
+      return _noteModalTags.map((t, i) =>
+        `<span class="note-tag-pill">${escHtml(t)}<span class="remove-tag" onclick="removeTagInModal(${i})" title="Remove">×</span></span>`
+      ).join('');
+    }
+
+    function removeTagInModal(idx) {
+      _noteModalTags.splice(idx, 1);
+      if (_noteModalTags.length === 0) _noteModalTags = ['general'];
+      const el = document.getElementById('nm-tag-pills');
+      if (el) el.innerHTML = _buildTagPillsModal();
+    }
+
+    function addTagInModal() {
+      const inp = document.getElementById('nm-new-tag');
+      if (!inp) return;
+      const val = inp.value.trim().toLowerCase().replace(/\s+/g, '-');
+      if (!val) return;
+      if (!_noteModalTags.includes(val)) {
+        // Remove auto 'general' if user is adding a real tag
+        _noteModalTags = _noteModalTags.filter(t => t !== 'general');
+        _noteModalTags.push(val);
+      }
+      inp.value = '';
+      const el = document.getElementById('nm-tag-pills');
+      if (el) el.innerHTML = _buildTagPillsModal();
+    }
+
+    function closeNoteModal() {
+      const overlay = document.getElementById('note-modal-overlay');
+      if (overlay) overlay.remove();
+      _noteModalNoteId = null;
+      _noteModalTags = [];
+    }
+
+    async function saveNoteModal() {
+      const title = (document.getElementById('nm-title')?.value || '').trim();
+      const content = (document.getElementById('nm-content')?.value || '').trim();
+      const project = (document.getElementById('nm-project')?.value || '').trim() || null;
+
+      if (!title) return showToast('Title is required', 'error');
+      if (!content) return showToast('Content is required', 'error');
+
+      const tags = _noteModalTags.length ? _noteModalTags : ['general'];
+
+      const body = { title, content, tags, project };
+
+      try {
+        const r = await fetch(`${API}/notes/${_noteModalNoteId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body)
+        });
+        if (r.ok) {
+          showToast('✓ Note updated', 'success');
+          closeNoteModal();
+          loadNotes(true);
+        } else {
+          const d = await r.json();
+          showToast('Error: ' + (d.detail || 'Save failed'), 'error');
+        }
+      } catch { showToast('Network error', 'error'); }
+    }
+
+    async function deleteNoteFromModal(noteId) {
+      if (!confirm('Delete this note? This cannot be undone.')) return;
+      try {
+        const r = await fetch(`${API}/notes/${noteId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (r.ok || r.status === 204) {
+          showToast('Note deleted', 'success');
+          closeNoteModal();
+          loadNotes(true);
+        } else {
+          showToast('Delete failed', 'error');
+        }
+      } catch { showToast('Network error', 'error'); }
+    }
+
+    // ── CREATE NOTE (sidebar panel) ───────────────────────────────────────────
     async function createNote() {
       const title = document.getElementById('new-note-title').value.trim();
       const content = document.getElementById('new-note-content').value.trim();
       if (!title || !content) return showToast('Title and content are required', 'error');
 
       const tagsRaw = document.getElementById('new-note-tags').value;
-      const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+      let tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : [];
+      if (tags.length === 0) tags = ['general']; // ← auto-tag fallback
 
-      const body = { title, content, tags, project: document.getElementById('new-note-project').value || null };
+      const body = { title, content, tags, project: document.getElementById('new-note-project').value.trim() || null };
 
       try {
         const r = await fetch(`${API}/notes`, {

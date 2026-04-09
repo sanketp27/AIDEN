@@ -1,0 +1,137 @@
+# deploy/cloudbuild-multicontainer.yaml
+#
+# Builds 4 Docker images in parallel, pushes to Artifact Registry,
+# then deploys the Cloud Run multi-container service.
+#
+# Called by deploy.sh step 8 via:
+#   gcloud builds submit . --config=deploy/cloudbuild-multicontainer.yaml \
+#     --substitutions=_PROJECT_ID=...,_REGION=...,_REPO=...,_SERVICE=...
+
+substitutions:
+  _PROJECT_ID: "${PROJECT_ID}"
+  _REGION:     "us-central1"
+  _REPO:       "aiden"
+  _SERVICE:    "aiden-api"
+
+steps:
+
+  # ── Build all 4 images in parallel ────────────────────────────────────────
+
+  - id: build-api
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - "--file=deploy/Dockerfile.api"
+      - "--tag=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/api:${COMMIT_SHA}"
+      - "--tag=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/api:latest"
+      - "--cache-from=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/api:latest"
+      - "."
+
+  - id: build-workspace-mcp
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - "--file=deploy/Dockerfile.workspace-mcp"
+      - "--tag=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/workspace-mcp:latest"
+      - "--cache-from=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/workspace-mcp:latest"
+      - "."
+
+  - id: build-mongodb-mcp
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - "--file=deploy/Dockerfile.mongodb-mcp"
+      - "--tag=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/mongodb-mcp:latest"
+      - "--cache-from=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/mongodb-mcp:latest"
+      - "."
+
+  - id: build-notion-mcp
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - "--file=deploy/Dockerfile.notion-mcp"
+      - "--tag=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/notion-mcp:latest"
+      - "--cache-from=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/notion-mcp:latest"
+      - "."
+
+  # ── Push all images ────────────────────────────────────────────────────────
+
+  - id: push-all
+    name: "gcr.io/cloud-builders/docker"
+    waitFor: [build-api, build-workspace-mcp, build-mongodb-mcp, build-notion-mcp]
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        BASE="${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}"
+        docker push $${BASE}/api:${COMMIT_SHA}
+        docker push $${BASE}/api:latest
+        docker push $${BASE}/workspace-mcp:latest
+        docker push $${BASE}/mongodb-mcp:latest
+        docker push $${BASE}/notion-mcp:latest
+        echo "All images pushed."
+
+  # ── Render service.yaml and deploy ────────────────────────────────────────
+
+  - id: deploy
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    waitFor: [push-all]
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        BUCKET="aiden-chroma-${_PROJECT_ID}"
+        sed \
+          -e "s|PROJECT_ID|${_PROJECT_ID}|g" \
+          -e "s|REGION|${_REGION}|g" \
+          -e "s|REPO|${_REPO}|g" \
+          -e "s|CHROMA_BUCKET|$${BUCKET}|g" \
+          deploy/service.yaml > /tmp/svc.yaml
+
+        echo "=== Deploying multi-container service ==="
+        gcloud run services replace /tmp/svc.yaml --region=${_REGION}
+        echo "=== Deploy complete ==="
+
+  # ── Make public ───────────────────────────────────────────────────────────
+
+  - id: make-public
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    waitFor: [deploy]
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        gcloud run services add-iam-policy-binding ${_SERVICE} \
+          --region=${_REGION} \
+          --member="allUsers" \
+          --role="roles/run.invoker" 2>/dev/null || true
+
+  # ── Print URL ─────────────────────────────────────────────────────────────
+
+  - id: print-url
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    waitFor: [make-public]
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        URL=$(gcloud run services describe ${_SERVICE} \
+          --region=${_REGION} --format='value(status.url)')
+        echo ""
+        echo "╔══════════════════════════════════════════════════════╗"
+        echo "  AIDEN v3.1 deployed!"
+        echo "  URL:    $${URL}"
+        echo "  Health: $${URL}/health"
+        echo "  Docs:   $${URL}/docs"
+        echo "  UPDATE DEMO_SCRIPT.md with this URL"
+        echo "╚══════════════════════════════════════════════════════╝"
+
+images:
+  - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/api:latest"
+  - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/workspace-mcp:latest"
+  - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/mongodb-mcp:latest"
+  - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/notion-mcp:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: "E2_HIGHCPU_8"
